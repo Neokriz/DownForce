@@ -268,14 +268,17 @@ class VersionStorageInfo {
       bool expand_range = true,   // if set, returns files which overlap the
                                   // range and overlap each other. If false,
                                   // then just files intersecting the range
-      InternalKey** next_smallest = nullptr)  // if non-null, returns the
-      const;  // smallest key of next file not included
+      InternalKey** next_smallest = nullptr,  // if non-null, returns the
+                                              // smallest key of next file not included
+      bool enable_downforce = false)  // if set, use DownForce L1 selection logic
+      const;
   void GetCleanInputsWithinInterval(
       int level, const InternalKey* begin,  // nullptr means before all keys
       const InternalKey* end,               // nullptr means after all keys
       std::vector<FileMetaData*>* inputs,
       int hint_index = -1,        // index of overlap file
-      int* file_index = nullptr)  // return index of overlap file
+      int* file_index = nullptr,  // return index of overlap file
+      bool enable_downforce = false)  // if set, use DownForce L1 selection logic
       const;
 
   void GetOverlappingInputsRangeBinarySearch(
@@ -286,8 +289,10 @@ class VersionStorageInfo {
       int hint_index,                // index of overlap file
       int* file_index,               // return index of overlap file
       bool within_interval = false,  // if set, force the inputs within interval
-      InternalKey** next_smallest = nullptr)  // if non-null, returns the
-      const;  // smallest key of next file not included
+      InternalKey** next_smallest = nullptr,  // if non-null, returns the
+                                              // smallest key of next file not included
+      bool enable_downforce = false)  // if set, use DownForce L1 selection logic
+      const;
 
   // Returns true iff some file in the specified level overlaps
   // some part of [*smallest_user_key,*largest_user_key].

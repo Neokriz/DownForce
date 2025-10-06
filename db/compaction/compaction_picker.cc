@@ -217,6 +217,7 @@ void CompactionPicker::GetRange(const std::vector<CompactionInputFiles>& inputs,
 }
 
 bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
+                                              const MutableCFOptions& mutable_cf_options,
                                               VersionStorageInfo* vstorage,
                                               CompactionInputFiles* inputs,
                                               InternalKey** next_smallest) {
@@ -252,8 +253,12 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
 
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
+  //yhh:need examination
   if (AreFilesInCompaction(inputs->files)) {
-    // return false;
+    // DownForce: Allow files in compaction when enabled
+    if (!mutable_cf_options.enable_downforce_compaction) {
+      return false;
+    }
   }
   return true;
 }
@@ -493,10 +498,13 @@ bool CompactionPicker::SetupOtherInputs(
     return false;
   }
   if (!output_level_inputs->empty()) {
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
-      // return false;
-
-      if(input_level == 0) return true;
+    if (!ExpandInputsToCleanCut(cf_name, mutable_cf_options, vstorage, output_level_inputs)) {
+      // DownForce: Allow L0 compaction even if clean cut fails
+      if (mutable_cf_options.enable_downforce_compaction) {
+        if(input_level == 0) return true;
+      } else {
+        return false;
+      }
     }
   }
 
@@ -528,7 +536,7 @@ bool CompactionPicker::SetupOtherInputs(
                                      nullptr);
     }
     uint64_t expanded_inputs_size = TotalFileSize(expanded_inputs.files);
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs)) {
+    if (!ExpandInputsToCleanCut(cf_name, mutable_cf_options, vstorage, &expanded_inputs)) {
       try_overlapping_inputs = false;
     }
     // It helps to reduce write amp and avoid a further separate compaction
@@ -549,7 +557,7 @@ bool CompactionPicker::SetupOtherInputs(
                                      *parent_index, parent_index);
       assert(!expanded_output_level_inputs.empty());
       if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
-          ExpandInputsToCleanCut(cf_name, vstorage,
+          ExpandInputsToCleanCut(cf_name, mutable_cf_options, vstorage,
                                  &expanded_output_level_inputs) &&
           expanded_output_level_inputs.size() == output_level_inputs->size()) {
         expand_inputs = true;
@@ -638,11 +646,14 @@ Compaction* CompactionPicker::CompactRange(
       return nullptr;
     }
 
-    // if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
-    //   *manual_conflict = true;
-    //   // Only one level 0 compaction allowed
-    //   return nullptr;
-    // }
+    // DownForce: Allow multiple L0 compactions when enabled
+    if (!mutable_cf_options.enable_downforce_compaction) {
+      if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
+        *manual_conflict = true;
+        // Only one level 0 compaction allowed
+        return nullptr;
+      }
+    }
 
     std::vector<CompactionInputFiles> inputs(max_output_level + 1 -
                                              start_level);
@@ -801,7 +812,7 @@ Compaction* CompactionPicker::CompactRange(
 
   InternalKey key_storage;
   InternalKey* next_smallest = &key_storage;
-  if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+  if (ExpandInputsToCleanCut(cf_name, mutable_cf_options, vstorage, &inputs, &next_smallest) ==
       false) {
     // manual compaction is now multi-threaded, so it can
     // happen that ExpandWhileOverlapping fails
@@ -1182,7 +1193,8 @@ void CompactionPicker::UnregisterCompaction(Compaction* c) {
 }
 
 void CompactionPicker::PickFilesMarkedForCompaction(
-    const std::string& cf_name, VersionStorageInfo* vstorage, int* start_level,
+    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+    VersionStorageInfo* vstorage, int* start_level,
     int* output_level, CompactionInputFiles* start_level_inputs,
     std::function<bool(const FileMetaData*)> skip_marked_file) {
   if (vstorage->FilesMarkedForCompaction().empty()) {
@@ -1207,7 +1219,7 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 
     start_level_inputs->files = {level_file.second};
     start_level_inputs->level = *start_level;
-    return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
+    return ExpandInputsToCleanCut(cf_name, mutable_cf_options, vstorage, start_level_inputs);
   };
 
   // take a chance on a random file first

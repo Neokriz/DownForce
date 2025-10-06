@@ -191,8 +191,8 @@ void LevelCompactionBuilder::PickFileToCompact(
     }
     start_level_inputs_.files = {level_file.second};
     start_level_inputs_.level = start_level_;
-    if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                   &start_level_inputs_)) {
+    if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                   vstorage_, &start_level_inputs_)) {
       return;
     }
   }
@@ -220,7 +220,10 @@ void LevelCompactionBuilder::SetupInitialFiles() {
                                &picked_file_to_compact);
       if (picked_file_to_compact) {
         // found the compaction!
-        if (start_level_ == 0) {
+        if (mutable_cf_options_.enable_downforce_compaction) {
+          // DownForce compaction strategy
+          compaction_reason_ = CompactionReason::kDownForceCompaction;
+        } else if (start_level_ == 0) {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
           compaction_reason_ = CompactionReason::kLevelL0FilesNum;
         } else {
@@ -244,7 +247,12 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           if(mutable_cf_options_.disable_intra_l0_compaction == false){
             if (PickIntraL0Compaction()) {
               output_level_ = 0;
-              compaction_reason_ = CompactionReason::kLevelL0FilesNum;
+              // DownForce handles L0 compactions differently
+              if (mutable_cf_options_.enable_downforce_compaction) {
+                compaction_reason_ = CompactionReason::kDownForceCompaction;
+              } else {
+                compaction_reason_ = CompactionReason::kLevelL0FilesNum;
+              }
               break;
             }
           }
@@ -265,7 +273,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
   parent_index_ = base_index_ = -1;
 
   compaction_picker_->PickFilesMarkedForCompaction(
-      cf_name_, vstorage_, &start_level_, &output_level_, &start_level_inputs_,
+      cf_name_, mutable_cf_options_, vstorage_, &start_level_, &output_level_, 
+      &start_level_inputs_,
       /*skip_marked_file*/ [](const FileMetaData* /* file */) {
         return false;
       });
@@ -389,7 +398,9 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
   CompactionInputFiles output_level_inputs;
   output_level_inputs.level = output_level_;
   vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                  &output_level_inputs.files);
+                                  &output_level_inputs.files,
+                                  -1, nullptr, true, nullptr,
+                                  mutable_cf_options_.enable_downforce_compaction);
   if (output_level_inputs.empty()) {
     if (TryExtendNonL0TrivialMove((int)start_index,
                                   true /* only_expand_right */)) {
@@ -413,8 +424,8 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
     }
 
     tmp_start_level_inputs.files.push_back(f);
-    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &tmp_start_level_inputs) ||
+    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                    vstorage_, &tmp_start_level_inputs) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {tmp_start_level_inputs}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
@@ -433,10 +444,12 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
     // Check whether any output level files are locked
     compaction_picker_->GetRange(tmp_start_level_inputs, &smallest, &largest);
     vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                    &output_level_inputs.files);
+                                    &output_level_inputs.files,
+                                    -1, nullptr, true, nullptr,
+                                    mutable_cf_options_.enable_downforce_compaction);
     if (!output_level_inputs.empty() &&
-        !compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &output_level_inputs)) {
+        !compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                    vstorage_, &output_level_inputs)) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
       return;
@@ -522,22 +535,33 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
-    // return nullptr;
-    if(start_level_ != 0) return nullptr;
+    // For DownForce compaction, only return nullptr if not L0
+    if (mutable_cf_options_.enable_downforce_compaction) {
+      if(start_level_ != 0) return nullptr;
+    } else {
+      return nullptr; //need checing
+    }
   }
 
   // Pick files in the output level and expand more files in the start level
   // if needed.
   if (!SetupOtherInputsIfNeeded()) {
-   if(start_level_ != 0) return nullptr;
-   // return nullptr;
+    // For DownForce compaction, only return nullptr if not L0
+    if (mutable_cf_options_.enable_downforce_compaction) {
+      if(start_level_ != 0) return nullptr;
+    } else {
+      return nullptr;
+    }
   }
 
   // Form a compaction object containing the files we picked.
   Compaction* c = GetCompaction();
 
-  if(start_level_inputs_.size() + output_level_inputs_.size() <= 1) 
+  // DownForce: ensure at least 2 files are being compacted
+  if (mutable_cf_options_.enable_downforce_compaction &&
+      start_level_inputs_.size() + output_level_inputs_.size() <= 1) {
     return nullptr;
+  }
 
   TEST_SYNC_POINT_CALLBACK("LevelCompactionPicker::PickCompaction:Return", c);
 
@@ -553,8 +577,10 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   // pull in more L0s.
   assert(!compaction_inputs_.empty());
 
-  if(compaction_inputs_.size() == 0){
-     return nullptr;
+  // DownForce: additional safety check for empty compaction inputs
+  if (mutable_cf_options_.enable_downforce_compaction &&
+      compaction_inputs_.size() == 0) {
+    return nullptr;
   }
 
   bool l0_files_might_overlap =
@@ -687,7 +713,9 @@ bool LevelCompactionBuilder::TryPickL0TrivialMove() {
         }
       }
       vstorage_->GetOverlappingInputs(output_level_, &my_smallest, &my_largest,
-                                      &output_level_inputs.files);
+                                      &output_level_inputs.files,
+                                      -1, nullptr, true, nullptr,
+                                      mutable_cf_options_.enable_downforce_compaction);
       if (output_level_inputs.empty()) {
         assert(!file->being_compacted);
         start_level_inputs_.files.push_back(file);
@@ -742,7 +770,9 @@ bool LevelCompactionBuilder::TryExtendNonL0TrivialMove(int start_index,
       }
       vstorage_->GetOverlappingInputs(output_level_, &(initial_file->smallest),
                                       &(next_file->largest),
-                                      &output_level_inputs.files);
+                                      &output_level_inputs.files,
+                                      -1, nullptr, true, nullptr,
+                                      mutable_cf_options_.enable_downforce_compaction);
       if (!output_level_inputs.empty()) {
         break;
       }
@@ -774,7 +804,9 @@ bool LevelCompactionBuilder::TryExtendNonL0TrivialMove(int start_index,
         }
         vstorage_->GetOverlappingInputs(output_level_, &(next_file->smallest),
                                         &(initial_file->largest),
-                                        &output_level_inputs.files);
+                                        &output_level_inputs.files,
+                                        -1, nullptr, true, nullptr,
+                                        mutable_cf_options_.enable_downforce_compaction);
         if (!output_level_inputs.empty()) {
           break;
         }
@@ -806,29 +838,36 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   // could be made better by looking at key-ranges that are
   // being compacted at level 0.
 
-  // This is for disable intra-L0 compaction and preventing return false.
-  // if (start_level_ == 0 &&
-  //    !compaction_picker_->level0_compactions_in_progress()->empty()) {
-  //   if (PickSizeBasedIntraL0Compaction()) {
-  //     return true;
-  //   }
-  //   TEST_SYNC_POINT("LevelCompactionPicker::PickCompactionBySize:0");
-  //   return false;
-  // }
+  // DownForce: Disable intra-L0 compaction and prevent early return
+  if (!mutable_cf_options_.enable_downforce_compaction) {
+    if (start_level_ == 0 &&
+        !compaction_picker_->level0_compactions_in_progress()->empty()) {
+      if (PickSizeBasedIntraL0Compaction()) {
+        return true;
+      }
+      TEST_SYNC_POINT("LevelCompactionPicker::PickCompactionBySize:0");
+      return false;
+    }
+  }
 
   start_level_inputs_.clear();
   start_level_inputs_.level = start_level_;
 
   assert(start_level_ >= 0);
 
-  // if (TryPickL0TrivialMove()) {
-  //  return true;
-  //}
+  // DownForce: Disable L0 trivial move when enabled
+  if (!mutable_cf_options_.enable_downforce_compaction) {
+    if (TryPickL0TrivialMove()) {
+      return true;
+    }
+  }
   
-  // Prevent intra-L0 compaction.
-  // if (start_level_ == 0 && PickSizeBasedIntraL0Compaction()) {
-  //  return true;
-  //}
+  // DownForce: Prevent intra-L0 compaction when enabled
+  if (!mutable_cf_options_.enable_downforce_compaction) {
+    if (start_level_ == 0 && PickSizeBasedIntraL0Compaction()) {
+      return true;
+    }
+  }
 
   const std::vector<FileMetaData*>& level_files =
       vstorage_->LevelFiles(start_level_);
@@ -859,8 +898,8 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     }
 
     start_level_inputs_.files.push_back(f);
-    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &start_level_inputs_) ||
+    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                    vstorage_, &start_level_inputs_) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {start_level_inputs_}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
@@ -869,7 +908,10 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       // A locked (pending compaction) input-level file was pulled in due to
       // user-key overlap.
 
-      // start_level_inputs_.clear();
+      // DownForce: Don't clear start_level_inputs_ when enabled
+      if (!mutable_cf_options_.enable_downforce_compaction) {
+        start_level_inputs_.clear();
+      }
 
       if (ioptions_.compaction_pri == kRoundRobin) {
         return false;
@@ -877,8 +919,11 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       continue;
     }
 
-    if(start_level_inputs_.size() <= 0) 
+    // DownForce: Additional validation check
+    if (mutable_cf_options_.enable_downforce_compaction &&
+        start_level_inputs_.size() <= 0) {
       return start_level_inputs_.size() > 0;
+    }
 
     // Now that input level is fully expanded, we check whether any output
     // files are locked due to pending compaction.
@@ -891,7 +936,9 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     CompactionInputFiles output_level_inputs;
     output_level_inputs.level = output_level_;
     vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                    &output_level_inputs.files);
+                                    &output_level_inputs.files,
+                                    -1, nullptr, true, nullptr,
+                                    mutable_cf_options_.enable_downforce_compaction);
     if (output_level_inputs.empty()) {
       if (start_level_ > 0 &&
           TryExtendNonL0TrivialMove(index,
@@ -900,8 +947,8 @@ bool LevelCompactionBuilder::PickFileToCompact() {
         break;
       }
     } else {
-      if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                      &output_level_inputs)) {
+      if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                      vstorage_, &output_level_inputs)) {
         start_level_inputs_.clear();
         if (ioptions_.compaction_pri == kRoundRobin) {
           return false;

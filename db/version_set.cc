@@ -4305,7 +4305,8 @@ bool VersionStorageInfo::OverlapInLevel(int level,
 void VersionStorageInfo::GetOverlappingInputs(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
-    bool expand_range, InternalKey** next_smallest) const {
+    bool expand_range, InternalKey** next_smallest, 
+    bool enable_downforce) const {
   if (level >= num_non_empty_levels_) {
     // this level is empty, no overlapping inputs
     return;
@@ -4318,7 +4319,8 @@ void VersionStorageInfo::GetOverlappingInputs(
   const Comparator* user_cmp = user_comparator_;
   if (level > 0) {
     GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs, hint_index,
-                                          file_index, false, next_smallest);
+                                          file_index, false, next_smallest,
+                                          enable_downforce);
     return;
   }
 
@@ -4394,7 +4396,8 @@ void VersionStorageInfo::GetOverlappingInputs(
 // The file_index returns a pointer to any file in an overlapping range.
 void VersionStorageInfo::GetCleanInputsWithinInterval(
     int level, const InternalKey* begin, const InternalKey* end,
-    std::vector<FileMetaData*>* inputs, int hint_index, int* file_index) const {
+    std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
+    bool enable_downforce) const {
   inputs->clear();
   if (file_index) {
     *file_index = -1;
@@ -4407,7 +4410,8 @@ void VersionStorageInfo::GetCleanInputsWithinInterval(
   }
 
   GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs, hint_index,
-                                        file_index, true /* within_interval */);
+                                        file_index, true /* within_interval */,
+                                        nullptr, enable_downforce);
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
@@ -4420,7 +4424,8 @@ void VersionStorageInfo::GetCleanInputsWithinInterval(
 void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
-    bool within_interval, InternalKey** next_smallest) const {
+    bool within_interval, InternalKey** next_smallest, 
+    bool enable_downforce) const {
   assert(level > 0);
 
   auto user_cmp = user_comparator_;
@@ -4502,8 +4507,8 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     *file_index = start_index;
   }
 
-  // if input leve is 1, search all files and put files that need compaction into inputs.
-  if(level == 1){
+  // DownForce: if enabled and level is 1, search all files and put files that need compaction into inputs.
+  if(enable_downforce && level == 1){
     for(int i = 0; i < (int)files_[level].size(); i++){
      if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
        inputs->push_back(files_[level][i]);
@@ -4512,10 +4517,12 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
   else{
     // insert overlapping files into vector
     for (int i = start_index; i < end_index; i++) {
-      // inputs->push_back(files_[level][i]);
-      // Put SST file that not being compacted.
-      if(!files_[level][i]->being_compacted)
+      // DownForce: Put SST file that is not being compacted
+      if(enable_downforce && !files_[level][i]->being_compacted) {
         inputs->push_back(files_[level][i]);
+      } else if (!enable_downforce) {
+        inputs->push_back(files_[level][i]);
+      }
     }
   }
   if (next_smallest != nullptr) {

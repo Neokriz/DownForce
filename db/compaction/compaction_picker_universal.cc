@@ -1288,8 +1288,8 @@ Compaction* UniversalCompactionBuilder::PickIncrementalForReduceSizeAmp(
     second_last_level_inputs.files.push_back(files[i]);
   }
   assert(!second_last_level_inputs.empty());
-  if (!picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                       &second_last_level_inputs,
+  if (!picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                       vstorage_, &second_last_level_inputs,
                                        /*next_smallest=*/nullptr)) {
     return nullptr;
   }
@@ -1430,8 +1430,8 @@ Compaction* UniversalCompactionBuilder::PickDeleteTriggeredCompaction() {
     // For multi-level universal, the strategy is to make this look more like
     // leveled. We pick one of the files marked for compaction and compact with
     // overlapping files in the adjacent level.
-    picker_->PickFilesMarkedForCompaction(cf_name_, vstorage_, &start_level,
-                                          &output_level, &start_level_inputs,
+    picker_->PickFilesMarkedForCompaction(cf_name_, mutable_cf_options_, vstorage_, 
+                                          &start_level, &output_level, &start_level_inputs,
                                           [this](const FileMetaData* file) {
                                             return ShouldSkipMarkedFile(file);
                                           });

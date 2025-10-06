@@ -101,6 +101,8 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "RoundRobinTtl";
     case CompactionReason::kRefitLevel:
       return "RefitLevel";
+    case CompactionReason::kDownForceCompaction:
+      return "DownForceCompaction";
     case CompactionReason::kNumOfReasons:
       // fall through
     default:

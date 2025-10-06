@@ -302,9 +302,22 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   bool disable_auto_compactions = false;
 
+  // Enable in-memory merge of memtables before flushing to L0
+  // Default: true
   bool in_memory_merge = true;
+
+  // Disable intra-L0 compaction (compactions within L0 level)
+  // Default: false
   bool disable_intra_l0_compaction = false;
+
+  // Enable L0 size-based stop writes trigger instead of file count based
+  // Default: false
   bool l0_size_based_stop = false;
+
+  // Enable DownForce compaction strategy that uses need_compaction flag
+  // and modified L1 file selection logic for better compaction efficiency
+  // Default: false
+  bool enable_downforce_compaction = false;
 
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default

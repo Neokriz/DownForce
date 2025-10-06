@@ -104,7 +104,12 @@ public enum CompactionReason {
   /**
    * Compaction by calling DBImpl::ReFitLevel
    */
-  kRefitLevel((byte) 0x13);
+  kRefitLevel((byte) 0x13),
+
+  /**
+   * DownForce compaction strategy with modified L1 file selection
+   */
+  kDownForceCompaction((byte) 0x14);
 
   private final byte value;
 

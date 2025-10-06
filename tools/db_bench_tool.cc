@@ -1849,6 +1849,9 @@ DEFINE_bool(disable_intra_l0_compaction, false,
 DEFINE_bool(l0_size_based_stop, false,
             "If true, occur write stall based L0 total size. RocksDB Default is false(i.e, Write stall occurs based number of SST files).");
 
+DEFINE_bool(enable_downforce_compaction, false,
+            "If true, enable DownForce compaction strategy with modified L1 file selection and concurrent L0 compactions. Default is false.");
+
 namespace ROCKSDB_NAMESPACE {
 namespace {
 static Status CreateMemTableRepFactory(
@@ -4380,6 +4383,7 @@ class Benchmark {
     options.in_memory_merge = FLAGS_in_memory_merge;
     options.disable_intra_l0_compaction = FLAGS_disable_intra_l0_compaction;
     options.l0_size_based_stop = FLAGS_l0_size_based_stop;
+    options.enable_downforce_compaction = FLAGS_enable_downforce_compaction;
 
     Status s =
         CreateMemTableRepFactory(config_options, &options.memtable_factory);

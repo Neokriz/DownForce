@@ -175,6 +175,7 @@ class CompactionPicker {
   //
   // Will return false if it is impossible to apply this compaction.
   bool ExpandInputsToCleanCut(const std::string& cf_name,
+                              const MutableCFOptions& mutable_cf_options,
                               VersionStorageInfo* vstorage,
                               CompactionInputFiles* inputs,
                               InternalKey** next_smallest = nullptr);
@@ -204,8 +205,8 @@ class CompactionPicker {
                        std::vector<FileMetaData*>* grandparents);
 
   void PickFilesMarkedForCompaction(
-      const std::string& cf_name, VersionStorageInfo* vstorage,
-      int* start_level, int* output_level,
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage, int* start_level, int* output_level,
       CompactionInputFiles* start_level_inputs,
       std::function<bool(const FileMetaData*)> skip_marked_file);
 
