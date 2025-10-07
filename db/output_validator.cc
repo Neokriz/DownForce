@@ -21,9 +21,11 @@ Status OutputValidator::Add(const Slice& key, const Slice& value) {
   }
   // prev_key_ starts with empty.
   if (!prev_key_.empty() && icmp_.Compare(key, prev_key_) < 0) {
-    // return Status::Corruption("Compaction sees out-of-order keys.");
-    // make forcely return OK.
-    return Status::OK();
+    // DownForce: Allow out-of-order keys when enabled
+    if (enable_downforce_compaction_) {
+      return Status::OK();
+    }
+    return Status::Corruption("Compaction sees out-of-order keys.");
   }
   prev_key_.assign(key.data(), key.size());
   return Status::OK();

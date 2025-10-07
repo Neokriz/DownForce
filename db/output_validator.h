@@ -16,10 +16,12 @@ namespace ROCKSDB_NAMESPACE {
 class OutputValidator {
  public:
   explicit OutputValidator(const InternalKeyComparator& icmp, bool enable_hash,
-                           uint64_t precalculated_hash = 0)
+                           uint64_t precalculated_hash = 0,
+                           bool enable_downforce_compaction = false)
       : icmp_(icmp),
         paranoid_hash_(precalculated_hash),
-        enable_hash_(enable_hash) {}
+        enable_hash_(enable_hash),
+        enable_downforce_compaction_(enable_downforce_compaction) {}
 
   // Add a key to the KV sequence, and return whether the key follows
   // criteria, e.g. key is ordered.
@@ -41,5 +43,6 @@ class OutputValidator {
   std::string prev_key_;
   uint64_t paranoid_hash_ = 0;
   bool enable_hash_;
+  bool enable_downforce_compaction_;
 };
 }  // namespace ROCKSDB_NAMESPACE

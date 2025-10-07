@@ -906,9 +906,14 @@ bool Compaction::ShouldFormSubcompactions() const {
   }
 
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {
-    // return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
-    if(start_level_ > 0) return true;
-    else return false;
+    // DownForce: Allow sub-compaction for L1+ compactions
+    if (mutable_cf_options_.enable_downforce_compaction) {
+      if(start_level_ > 0) return true;
+      else return false;
+    } else {
+      // Original logic
+      return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
+    }
   } else if (cfd_->ioptions()->compaction_style == kCompactionStyleUniversal) {
     return number_levels_ > 1 && output_level_ > 0;
   } else {

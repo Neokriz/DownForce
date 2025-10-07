@@ -253,7 +253,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
   if (AreFilesInCompaction(inputs->files)) {
-    // return false;
+    return false;
   }
   return true;
 }
@@ -266,8 +266,8 @@ bool CompactionPicker::RangeOverlapWithCompaction(
     if (c->output_level() == level &&
         ucmp->CompareWithoutTimestamp(smallest_user_key,
                                       c->GetLargestUserKey()) <= 0 &&
-        ucmp->CompareWithoutTimestamp(largest_user_key,
-                                      c->GetSmallestUserKey()) >= 0) {
+      ucmp->CompareWithoutTimestamp(largest_user_key,
+                                    c->GetSmallestUserKey()) >= 0) {
       // Overlap
       if(level != 1) return false;
       else return true;// return true;
@@ -494,9 +494,11 @@ bool CompactionPicker::SetupOtherInputs(
   }
   if (!output_level_inputs->empty()) {
     if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
-      // return false;
-
-      if(input_level == 0) return true;
+      // DownForce: Allow L0 compaction to proceed even if inputs can't be expanded to clean cut
+      if(mutable_cf_options.enable_downforce_compaction && input_level == 0) {
+        return true;
+      }
+      return false;
     }
   }
 
@@ -638,11 +640,14 @@ Compaction* CompactionPicker::CompactRange(
       return nullptr;
     }
 
-    // if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
-    //   *manual_conflict = true;
-    //   // Only one level 0 compaction allowed
-    //   return nullptr;
-    // }
+    // DownForce: Allow parallel L0 compactions
+    if (!mutable_cf_options.enable_downforce_compaction) {
+      if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
+        *manual_conflict = true;
+        // Only one level 0 compaction allowed
+        return nullptr;
+      }
+    }
 
     std::vector<CompactionInputFiles> inputs(max_output_level + 1 -
                                              start_level);
@@ -1233,20 +1238,27 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 
 bool CompactionPicker::GetOverlappingL0Files(
     VersionStorageInfo* vstorage, CompactionInputFiles* start_level_inputs,
-    int output_level, int* parent_index) {
+    int output_level, int* parent_index,
+    const MutableCFOptions* mutable_cf_options) {
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
-   
-  // assert(level0_compactions_in_progress()->empty());
+  
+  // DownForce: Skip assertion when parallel L0 compactions are allowed
+  if (!mutable_cf_options || !mutable_cf_options->enable_downforce_compaction) {
+    assert(level0_compactions_in_progress()->empty());
+  }
+  
   InternalKey smallest, largest;
   GetRange(*start_level_inputs, &smallest, &largest);
   // Note that the next call will discard the file we placed in
   // c->inputs_[0] earlier and replace it with an overlapping set
   // which will include the picked file.
 
-  // if always true, occur seg fault??
-  if(!level0_compactions_in_progress()->empty()) 
-    return true;
+  // DownForce: Allow L0 compactions to proceed even if others are in progress
+  if(mutable_cf_options && mutable_cf_options->enable_downforce_compaction &&
+     !level0_compactions_in_progress()->empty()) {
+    return true; // if always true, occur seg fault??
+  }
 
   start_level_inputs->files.clear();
   vstorage->GetOverlappingInputs(0, &smallest, &largest,

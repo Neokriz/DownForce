@@ -745,7 +745,9 @@ Status CompactionJob::Run() {
 
         if (s.ok() && paranoid_file_checks_) {
           OutputValidator validator(cfd->internal_comparator(),
-                                    /*_enable_hash=*/true);
+                                    /*_enable_hash=*/true,
+                                    /*precalculated_hash=*/0,
+                                    compact_->compaction->mutable_cf_options()->enable_downforce_compaction);
           for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
             s = validator.Add(iter->key(), iter->value());
             if (!s.ok()) {
@@ -1948,7 +1950,8 @@ Status CompactionJob::OpenCompactionOutputFile(SubcompactionState* sub_compact,
     }
 
     outputs.AddOutput(std::move(meta), cfd->internal_comparator(),
-                      paranoid_file_checks_);
+                      paranoid_file_checks_, false, 0,
+                      sub_compact->compaction->mutable_cf_options()->enable_downforce_compaction);
   }
 
   writable_file->SetIOPriority(GetRateLimiterPriority());

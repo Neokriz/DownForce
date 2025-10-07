@@ -302,6 +302,14 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   bool disable_auto_compactions = false;
 
+  // Enable DownForce compaction strategy for better parallelism and throughput.
+  // When enabled, this option activates several optimizations:
+  // - Allows parallel L0 compactions
+  // - Handles overlapping files gracefully
+  // - Enables more aggressive compaction scheduling
+  // Default: false
+  bool enable_downforce_compaction = false;
+
   bool in_memory_merge = true;
   bool disable_intra_l0_compaction = false;
   bool l0_size_based_stop = false;

@@ -211,7 +211,8 @@ class CompactionPicker {
 
   bool GetOverlappingL0Files(VersionStorageInfo* vstorage,
                              CompactionInputFiles* start_level_inputs,
-                             int output_level, int* parent_index);
+                             int output_level, int* parent_index,
+                             const MutableCFOptions* mutable_cf_options = nullptr);
 
   // Register this compaction in the set of running compactions
   void RegisterCompaction(Compaction* c);

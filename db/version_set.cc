@@ -4502,18 +4502,33 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     *file_index = start_index;
   }
 
-  // if input leve is 1, search all files and put files that need compaction into inputs.
+  // DownForce: if input leve is 1, search all files and put files that need compaction into inputs. (in two steps)
+  // DownForce: Check if level 1 has files marked for compaction due to overlaps
+  bool level1_has_overlaps = false;
   if(level == 1){
     for(int i = 0; i < (int)files_[level].size(); i++){
-     if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
-       inputs->push_back(files_[level][i]);
-   }
+      if(files_[level][i]->need_compaction){
+        level1_has_overlaps = true;
+        break;
+      }
+    }
+  }
+
+  // DownForce: If level 1 has overlap markers, select all files that need compaction
+  if(level == 1 && level1_has_overlaps){
+    for(int i = 0; i < (int)files_[level].size(); i++){
+      if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
+        inputs->push_back(files_[level][i]);
+    }
   }
   else{
     // insert overlapping files into vector
     for (int i = start_index; i < end_index; i++) {
+      //original codes
       // inputs->push_back(files_[level][i]);
       // Put SST file that not being compacted.
+
+      // DownForce: Skip files being compacted for better parallelism
       if(!files_[level][i]->being_compacted)
         inputs->push_back(files_[level][i]);
     }
@@ -7057,16 +7072,21 @@ InternalIterator* VersionSet::MakeInputIterator(
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
 
-  //const size_t space = (c->level() == 0 ? c->input_levels(0)->num_files +
-  //                                            c->num_input_levels() - 1
-  //                                      : c->num_input_levels());
-  
-  // Caclulate total files for all levels.
-  size_t total_files = 0;
-  for (size_t which = 0; which < c->num_input_levels(); which++) {
-    total_files += c->input_levels(which)->num_files;
+  // DownForce: Calculate space differently based on enable_downforce_compaction
+  size_t space;
+  if (c->mutable_cf_options()->enable_downforce_compaction) {
+    // Calculate total files for all levels (create iterator per file)
+    size_t total_files = 0;
+    for (size_t which = 0; which < c->num_input_levels(); which++) {
+      total_files += c->input_levels(which)->num_files;
+    }
+    space = total_files;
+  } else {
+    // Original logic
+    space = (c->level() == 0 ? c->input_levels(0)->num_files +
+                                c->num_input_levels() - 1
+                             : c->num_input_levels());
   }
-  const size_t space = total_files;
   
   InternalIterator** list = new InternalIterator*[space];
   // First item in the pair is a pointer to range tombstones.
@@ -7119,7 +7139,8 @@ InternalIterator* VersionSet::MakeInputIterator(
           range_tombstones.emplace_back(std::move(range_tombstone_iter),
                                         nullptr);
         }
-      } else {
+      } else if (c->mutable_cf_options()->enable_downforce_compaction) {
+        // DownForce: Create iterator per file for all levels
         for (size_t i = 0; i < flevel->num_files; i++) {
           const FileMetaData& fmd = *flevel->files[i].file_metadata;
           if (start.has_value() &&
@@ -7155,6 +7176,19 @@ InternalIterator* VersionSet::MakeInputIterator(
             range_tombstones.emplace_back(std::move(range_tombstone_iter),
                                           nullptr);
         }
+      } else {
+        // Original logic: Use LevelIterator for non-L0 levels
+        std::unique_ptr<TruncatedRangeDelIterator>** tombstone_iter_ptr =
+            nullptr;
+        list[num++] = new LevelIterator(
+            cfd->table_cache(), read_options, file_options_compactions,
+            cfd->internal_comparator(), flevel, *c->mutable_cf_options(),
+            /*should_sample=*/false,
+            /*no per level latency histogram=*/nullptr,
+            TableReaderCaller::kCompaction, /*skip_filters=*/false,
+            /*level=*/static_cast<int>(c->level(which)), range_del_agg,
+            c->boundaries(which), false, &tombstone_iter_ptr);
+        range_tombstones.emplace_back(nullptr, tombstone_iter_ptr);
       }
     }
   }

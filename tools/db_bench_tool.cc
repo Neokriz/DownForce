@@ -1634,6 +1634,9 @@ DEFINE_bool(print_malloc_stats, false,
 
 DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
+DEFINE_bool(enable_downforce_compaction, false,
+            "Enable DownForce compaction strategy for better parallelism");
+
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0,
               "Set the size limit for the WAL Files in MB.");
@@ -4716,6 +4719,10 @@ class Benchmark {
     options.table_cache_numshardbits = FLAGS_table_cache_numshardbits;
     options.max_compaction_bytes = FLAGS_max_compaction_bytes;
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
+    options.enable_downforce_compaction = FLAGS_enable_downforce_compaction;
+    options.in_memory_merge = FLAGS_in_memory_merge;
+    options.disable_intra_l0_compaction = FLAGS_disable_intra_l0_compaction;
+    options.l0_size_based_stop = FLAGS_l0_size_based_stop;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
     options.paranoid_checks = FLAGS_paranoid_checks;
     options.force_consistency_checks = FLAGS_force_consistency_checks;

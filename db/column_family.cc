@@ -930,11 +930,13 @@ ColumnFamilyData::GetWriteStallConditionAndCause(
   } else if (!mutable_cf_options.disable_auto_compactions &&
              mutable_cf_options.l0_size_based_stop == false &&
              num_l0_files >= mutable_cf_options.level0_stop_writes_trigger) {
+    // File count based stall (default RocksDB behavior)
     return {WriteStallCondition::kStopped, WriteStallCause::kL0FileCountLimit};
   } else if (!mutable_cf_options.disable_auto_compactions &&
-       mutable_cf_options.l0_size_based_stop == true &&
-       l0_bytes >= 
-       mutable_cf_options.level0_stop_writes_trigger * mutable_cf_options.write_buffer_size) {
+             mutable_cf_options.l0_size_based_stop == true &&
+             l0_bytes >= 
+             mutable_cf_options.level0_stop_writes_trigger * mutable_cf_options.write_buffer_size) {
+    // Size based stall (when l0_size_based_stop is enabled)
     return {WriteStallCondition::kStopped, WriteStallCause::kL0FileCountLimit};
   } else if (!mutable_cf_options.disable_auto_compactions &&
              mutable_cf_options.hard_pending_compaction_bytes_limit > 0 &&

@@ -615,12 +615,14 @@ class VersionBuilder::Rep {
                 << " smallest key: " << rhs->smallest.DebugString(true);
 
             //return Status::Corruption("VersionBuilder", oss.str());
-             if(!lhs->need_compaction){
-               lhs->need_compaction = true;
-             }
-             if(!rhs->need_compaction){
-               rhs->need_compaction = true;
-             }
+            // DownForce: Mark overlapping files for compaction instead of returning error
+            // This allows temporary overlaps which will be resolved by subsequent compactions
+            if(!lhs->need_compaction){
+              lhs->need_compaction = true;
+            }
+            if(!rhs->need_compaction){
+              rhs->need_compaction = true;
+            }
           }
 
           return Status::OK();
