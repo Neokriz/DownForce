@@ -273,9 +273,8 @@ bool CompactionPicker::RangeOverlapWithCompaction(
                                       c->GetLargestUserKey()) <= 0 &&
         ucmp->CompareWithoutTimestamp(largest_user_key,
                                       c->GetSmallestUserKey()) >= 0) {
-      // Overlap
-      if(level != 1) return false;
-      else return true;// return true;
+      // Overlap found
+      return true;
     }
     if (c->SupportsPerKeyPlacement()) {
       if (c->OverlapPenultimateLevelOutputRange(smallest_user_key,

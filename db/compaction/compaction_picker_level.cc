@@ -425,13 +425,20 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
 
     tmp_start_level_inputs.files.push_back(f);
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
-                                                    vstorage_, &tmp_start_level_inputs) ||
-        compaction_picker_->FilesRangeOverlapWithCompaction(
-            {tmp_start_level_inputs}, output_level_,
-            Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
-                                                 ioptions_, start_level_,
-                                                 output_level_))) {
+                                                    vstorage_, &tmp_start_level_inputs)) {
       // Constraint 1a
+      tmp_start_level_inputs.clear();
+      return;
+    }
+    
+    // Check for overlap with running compactions (skip for DownForce L1 compactions)
+    bool has_overlap = compaction_picker_->FilesRangeOverlapWithCompaction(
+        {tmp_start_level_inputs}, output_level_,
+        Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
+                                             ioptions_, start_level_,
+                                             output_level_));
+    if (has_overlap && !(mutable_cf_options_.enable_downforce_compaction && output_level_ == 1)) {
+      // Constraint 1a - abort unless DownForce is enabled for L1
       tmp_start_level_inputs.clear();
       return;
     }
@@ -504,11 +511,13 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
     // (1) we are running a non-exclusive manual compaction
     // (2) AddFile ingest a new file into the LSM tree
     // We need to disallow this from happening.
-    if (compaction_picker_->FilesRangeOverlapWithCompaction(
+    // Exception: DownForce allows overlaps for L1 compactions
+    bool has_output_overlap = compaction_picker_->FilesRangeOverlapWithCompaction(
             compaction_inputs_, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_));
+    if (has_output_overlap && !(mutable_cf_options_.enable_downforce_compaction && output_level_ == 1)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       return false;
@@ -535,21 +544,17 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
-    // For DownForce compaction, only return nullptr if not L0
-    if (mutable_cf_options_.enable_downforce_compaction) {
-      if(start_level_ != 0) return nullptr;
-    } else {
-      return nullptr; //need checing
+    // DownForce: Allow L0 compactions to continue even if setup fails
+    if (!mutable_cf_options_.enable_downforce_compaction || start_level_ != 0) {
+      return nullptr;
     }
   }
 
   // Pick files in the output level and expand more files in the start level
   // if needed.
   if (!SetupOtherInputsIfNeeded()) {
-    // For DownForce compaction, only return nullptr if not L0
-    if (mutable_cf_options_.enable_downforce_compaction) {
-      if(start_level_ != 0) return nullptr;
-    } else {
+    // DownForce: Allow L0 compactions to continue even if setup fails
+    if (!mutable_cf_options_.enable_downforce_compaction || start_level_ != 0) {
       return nullptr;
     }
   }
@@ -898,20 +903,22 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     }
 
     start_level_inputs_.files.push_back(f);
-    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
-                                                    vstorage_, &start_level_inputs_) ||
-        compaction_picker_->FilesRangeOverlapWithCompaction(
-            {start_level_inputs_}, output_level_,
-            Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
-                                                 ioptions_, start_level_,
-                                                 output_level_))) {
+    bool expand_failed = !compaction_picker_->ExpandInputsToCleanCut(cf_name_, mutable_cf_options_,
+                                                                     vstorage_, &start_level_inputs_);
+    bool has_overlap = compaction_picker_->FilesRangeOverlapWithCompaction(
+        {start_level_inputs_}, output_level_,
+        Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
+                                             ioptions_, start_level_,
+                                             output_level_));
+    
+    // For DownForce with L1, allow overlaps with running compactions
+    bool should_abort = expand_failed || 
+                       (has_overlap && !(mutable_cf_options_.enable_downforce_compaction && output_level_ == 1));
+    
+    if (should_abort) {
       // A locked (pending compaction) input-level file was pulled in due to
-      // user-key overlap.
-
-      // DownForce: Don't clear start_level_inputs_ when enabled
-      if (!mutable_cf_options_.enable_downforce_compaction) {
-        start_level_inputs_.clear();
-      }
+      // user-key overlap, or there's an overlap with running compaction
+      start_level_inputs_.clear();
 
       if (ioptions_.compaction_pri == kRoundRobin) {
         return false;
