@@ -61,6 +61,8 @@ namespace ROCKSDB_NAMESPACE {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {
+    case CompactionReason::kDownForceCompaction:
+      return "DownForceCompaction";
     case CompactionReason::kUnknown:
       return "Unknown";
     case CompactionReason::kLevelL0FilesNum:
@@ -101,8 +103,6 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "RoundRobinTtl";
     case CompactionReason::kRefitLevel:
       return "RefitLevel";
-    case CompactionReason::kDownForceCompaction:
-      return "DownForceCompaction";
     case CompactionReason::kNumOfReasons:
       // fall through
     default:

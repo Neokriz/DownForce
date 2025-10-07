@@ -1852,6 +1852,9 @@ DEFINE_bool(l0_size_based_stop, false,
 DEFINE_bool(enable_downforce_compaction, false,
             "If true, enable DownForce compaction strategy with modified L1 file selection and concurrent L0 compactions. Default is false.");
 
+DEFINE_uint32(downforce_compaction_conflict_threshold, 4,
+              "Threshold for L0 compaction conflicts before triggering DownForce compaction. Default is 4.");
+
 namespace ROCKSDB_NAMESPACE {
 namespace {
 static Status CreateMemTableRepFactory(
@@ -4383,7 +4386,6 @@ class Benchmark {
     options.in_memory_merge = FLAGS_in_memory_merge;
     options.disable_intra_l0_compaction = FLAGS_disable_intra_l0_compaction;
     options.l0_size_based_stop = FLAGS_l0_size_based_stop;
-    options.enable_downforce_compaction = FLAGS_enable_downforce_compaction;
 
     Status s =
         CreateMemTableRepFactory(config_options, &options.memtable_factory);
@@ -4820,6 +4822,12 @@ class Benchmark {
     options.block_protection_bytes_per_key =
         FLAGS_block_protection_bytes_per_key;
     options.paranoid_memory_checks = FLAGS_paranoid_memory_checks;
+    
+    // DownForce options
+    options.enable_downforce_compaction = FLAGS_enable_downforce_compaction;
+    options.downforce_compaction_conflict_threshold = FLAGS_downforce_compaction_conflict_threshold;
+    printf("[DEBUG] Setting DownForce options: enable=%d, threshold=%u\n",
+           FLAGS_enable_downforce_compaction, FLAGS_downforce_compaction_conflict_threshold);
   }
 
   void InitializeOptionsGeneral(Options* opts) {

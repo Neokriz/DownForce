@@ -319,6 +319,11 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: false
   bool enable_downforce_compaction = false;
 
+  // Threshold for triggering DownForce compaction. Only activate DownForce
+  // when this many L0 compaction conflicts have accumulated.
+  // Default: 4
+  uint32_t downforce_compaction_conflict_threshold = 1;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default

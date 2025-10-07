@@ -247,6 +247,10 @@ class CompactionPicker {
   std::unordered_set<Compaction*> compactions_in_progress_;
 
   const InternalKeyComparator* const icmp_;
+
+  // DownForce: Counts L0 compaction conflicts for threshold-based activation
+  // Protected by DB mutex
+  uint32_t downforce_l0_conflict_count_;
 };
 
 // A dummy compaction that never triggers any automatic

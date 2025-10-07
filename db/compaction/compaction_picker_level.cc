@@ -220,10 +220,11 @@ void LevelCompactionBuilder::SetupInitialFiles() {
                                &picked_file_to_compact);
       if (picked_file_to_compact) {
         // found the compaction!
-        if (mutable_cf_options_.enable_downforce_compaction) {
-          // DownForce compaction strategy
-          compaction_reason_ = CompactionReason::kDownForceCompaction;
-        } else if (start_level_ == 0) {
+        // Set initial compaction reason based on start level
+        // For DownForce L0->L1, we'll verify later if it's actually using DownForce logic
+          // DownForce's key differentiator is L1 need_compaction-based file selection
+          // Only mark as DownForceCompaction when output_level is 1 (where DownForce logic applies)
+        if (start_level_ == 0) {
           // L0 score = `num L0 files` / `level0_file_num_compaction_trigger`
           compaction_reason_ = CompactionReason::kLevelL0FilesNum;
         } else {
@@ -247,12 +248,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           if(mutable_cf_options_.disable_intra_l0_compaction == false){
             if (PickIntraL0Compaction()) {
               output_level_ = 0;
-              // DownForce handles L0 compactions differently
-              if (mutable_cf_options_.enable_downforce_compaction) {
-                compaction_reason_ = CompactionReason::kDownForceCompaction;
-              } else {
-                compaction_reason_ = CompactionReason::kLevelL0FilesNum;
-              }
+              // Intra-L0 compaction is always L0FilesNum based, even with DownForce
+              compaction_reason_ = CompactionReason::kLevelL0FilesNum;
               break;
             }
           }
@@ -551,6 +548,27 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
       if(start_level_ != 0) return nullptr;
     } else {
       return nullptr;
+    }
+  }
+
+  printf("[DEBUG] compaction_picker_level.cc: PickCompaction()\n");
+  printf("[DEBUG] mutable_cf_options_.enable_downforce_compaction=%d\n", mutable_cf_options_.enable_downforce_compaction);
+  // DownForce: Check if this is actually a DownForce compaction
+  // DownForce compaction is identified by L0->L1 with L1 files selected by need_compaction flag
+  if (mutable_cf_options_.enable_downforce_compaction && 
+      start_level_ == 0 && output_level_ == 1 &&
+      compaction_reason_ == CompactionReason::kLevelL0FilesNum) {
+    // Check if any output level files were selected due to need_compaction flag
+    bool has_need_compaction_file = false;
+    for (auto* files : output_level_inputs_.files) {
+      if (files->need_compaction) {
+        has_need_compaction_file = true;
+        break;
+      }
+    }
+    // Only mark as DownForceCompaction if L1 files with need_compaction were selected
+    if (has_need_compaction_file) {
+      compaction_reason_ = CompactionReason::kDownForceCompaction;
     }
   }
 

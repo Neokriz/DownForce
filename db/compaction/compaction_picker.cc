@@ -128,7 +128,7 @@ CompressionOptions GetCompressionOptions(const MutableCFOptions& cf_options,
 
 CompactionPicker::CompactionPicker(const ImmutableOptions& ioptions,
                                    const InternalKeyComparator* icmp)
-    : ioptions_(ioptions), icmp_(icmp) {}
+    : ioptions_(ioptions), icmp_(icmp), downforce_l0_conflict_count_(0) {}
 
 CompactionPicker::~CompactionPicker() = default;
 
@@ -619,6 +619,8 @@ Compaction* CompactionPicker::CompactRange(
     const CompactRangeOptions& compact_range_options, const InternalKey* begin,
     const InternalKey* end, InternalKey** compaction_end, bool* manual_conflict,
     uint64_t max_file_num_to_ignore, const std::string& trim_ts) {
+
+  printf("[DEBUG] CompactionPicker::CompactRange called - input_level=%d, output_level=%d\n", input_level, output_level);
   // CompactionPickerFIFO has its own implementation of compact range
   assert(ioptions_.compaction_style != kCompactionStyleFIFO);
 
@@ -646,12 +648,32 @@ Compaction* CompactionPicker::CompactRange(
       return nullptr;
     }
 
-    // DownForce: Allow multiple L0 compactions when enabled
-    if (!mutable_cf_options.enable_downforce_compaction) {
-      if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
+    // DownForce: Threshold-based L0 compaction activation (TIERED/Universal Compaction)
+    printf("[DEBUG] TIERED path - start_level=%d, l0_compactions_in_progress=%zu\n", 
+           start_level, level0_compactions_in_progress_.size());
+    if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
+      if (!mutable_cf_options.enable_downforce_compaction) {
+        // Normal behavior: reject conflict
         *manual_conflict = true;
-        // Only one level 0 compaction allowed
         return nullptr;
+      } else {
+        // DownForce enabled: check threshold
+        if (downforce_l0_conflict_count_ < mutable_cf_options.downforce_compaction_conflict_threshold) {
+          // Haven't reached threshold yet, increment and reject
+          downforce_l0_conflict_count_++;
+          ROCKS_LOG_INFO(ioptions_.logger,
+                         "[DownForce] L0 conflict detected (Tiered path). Count incremented to %d (threshold: %d)",
+                         downforce_l0_conflict_count_,
+                         mutable_cf_options.downforce_compaction_conflict_threshold);
+          *manual_conflict = true;
+          return nullptr;
+        }
+        // Threshold reached: allow DownForce compaction to proceed
+        ROCKS_LOG_INFO(ioptions_.logger,
+                       "[DownForce] Threshold reached! (Tiered path) Count=%d, Threshold=%d. Proceeding with DownForce compaction.",
+                       downforce_l0_conflict_count_,
+                       mutable_cf_options.downforce_compaction_conflict_threshold);
+        // (continue with normal flow, don't return)
       }
     }
 
@@ -723,10 +745,35 @@ Compaction* CompactionPicker::CompactRange(
   }
 
   if ((input_level == 0) && (!level0_compactions_in_progress_.empty())) {
-    // Only one level 0 compaction allowed
-    TEST_SYNC_POINT("CompactionPicker::CompactRange:Conflict");
-    *manual_conflict = true;
-    return nullptr;
+    // DownForce: Threshold-based L0 compaction activation (Leveled Compaction path)
+    printf("[DEBUG] L0 conflict detected in Leveled Compaction path - input_level=%d, l0_compactions_in_progress=%zu\n", 
+           input_level, level0_compactions_in_progress_.size());
+    
+    if (!mutable_cf_options.enable_downforce_compaction) {
+      // Normal behavior: reject conflict
+      TEST_SYNC_POINT("CompactionPicker::CompactRange:Conflict");
+      *manual_conflict = true;
+      return nullptr;
+    } else {
+      // DownForce enabled: check threshold
+      if (downforce_l0_conflict_count_ < mutable_cf_options.downforce_compaction_conflict_threshold) {
+        // Haven't reached threshold yet, increment and reject
+        downforce_l0_conflict_count_++;
+        ROCKS_LOG_INFO(ioptions_.logger,
+                       "[DownForce] L0 conflict detected (Leveled path). Count incremented to %d (threshold: %d)",
+                       downforce_l0_conflict_count_,
+                       mutable_cf_options.downforce_compaction_conflict_threshold);
+        TEST_SYNC_POINT("CompactionPicker::CompactRange:Conflict");
+        *manual_conflict = true;
+        return nullptr;
+      }
+      // Threshold reached: allow DownForce compaction to proceed
+      ROCKS_LOG_INFO(ioptions_.logger,
+                     "[DownForce] Threshold reached! (Leveled path) Count=%d, Threshold=%d. Proceeding with DownForce compaction.",
+                     downforce_l0_conflict_count_,
+                     mutable_cf_options.downforce_compaction_conflict_threshold);
+      // Continue with normal flow - allow compaction to proceed despite conflict
+    }
   }
 
   // Avoid compacting too much in one shot in case the range is large.
@@ -1185,6 +1232,15 @@ void CompactionPicker::UnregisterCompaction(Compaction* c) {
   if (c == nullptr) {
     return;
   }
+  
+  // DownForce: Reset conflict counter when DownForce compaction completes
+  if (c->mutable_cf_options()->enable_downforce_compaction &&
+      c->start_level() == 0 &&
+      downforce_l0_conflict_count_ >= c->mutable_cf_options()->downforce_compaction_conflict_threshold) {
+    // This was a DownForce-enabled L0 compaction that bypassed restrictions
+    downforce_l0_conflict_count_ = 0;
+  }
+  
   if (c->start_level() == 0 ||
       ioptions_.compaction_style == kCompactionStyleUniversal) {
     level0_compactions_in_progress_.erase(c);
