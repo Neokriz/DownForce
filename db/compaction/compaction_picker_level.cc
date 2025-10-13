@@ -192,7 +192,8 @@ void LevelCompactionBuilder::PickFileToCompact(
     start_level_inputs_.files = {level_file.second};
     start_level_inputs_.level = start_level_;
     if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                   &start_level_inputs_)) {
+                                                   &start_level_inputs_, nullptr,
+                                                   mutable_cf_options_.enable_downforce_compaction)) {
       return;
     }
   }
@@ -423,12 +424,14 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
 
     tmp_start_level_inputs.files.push_back(f);
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &tmp_start_level_inputs) ||
+                                                    &tmp_start_level_inputs, nullptr,
+                                                    mutable_cf_options_.enable_downforce_compaction) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {tmp_start_level_inputs}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_),
+            mutable_cf_options_.enable_downforce_compaction)) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
       return;
@@ -445,7 +448,8 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
                                     &output_level_inputs.files);
     if (!output_level_inputs.empty() &&
         !compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &output_level_inputs)) {
+                                                    &output_level_inputs, nullptr,
+                                                    mutable_cf_options_.enable_downforce_compaction)) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
       return;
@@ -504,7 +508,8 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
             compaction_inputs_, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_),
+            mutable_cf_options_.enable_downforce_compaction)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       return false;
@@ -883,12 +888,14 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
     start_level_inputs_.files.push_back(f);
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                    &start_level_inputs_) ||
+                                                    &start_level_inputs_, nullptr,
+                                                    mutable_cf_options_.enable_downforce_compaction) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {start_level_inputs_}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_),
+            mutable_cf_options_.enable_downforce_compaction)) {
       // A locked (pending compaction) input-level file was pulled in due to
       // user-key overlap.
       
@@ -930,7 +937,8 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       }
     } else {
       if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                      &output_level_inputs)) {
+                                                      &output_level_inputs, nullptr,
+                                                      mutable_cf_options_.enable_downforce_compaction)) {
         start_level_inputs_.clear();
         if (ioptions_.compaction_pri == kRoundRobin) {
           return false;

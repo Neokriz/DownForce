@@ -219,7 +219,8 @@ void CompactionPicker::GetRange(const std::vector<CompactionInputFiles>& inputs,
 bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
                                               VersionStorageInfo* vstorage,
                                               CompactionInputFiles* inputs,
-                                              InternalKey** next_smallest) {
+                                              InternalKey** next_smallest,
+                                              bool enable_downforce_compaction) {
   // This isn't good compaction
   assert(!inputs->empty());
 
@@ -253,14 +254,19 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
   if (AreFilesInCompaction(inputs->files)) {
-    return false;
+    // DownForce mode: Ignore files being compacted (DF-Leveled compatibility)
+    // This allows parallel compactions even if files overlap
+    if (!enable_downforce_compaction) {
+      return false;  // Original RocksDB: abort if files are being compacted
+    }
+    // DownForce: Continue despite files being in compaction
   }
   return true;
 }
 
 bool CompactionPicker::RangeOverlapWithCompaction(
     const Slice& smallest_user_key, const Slice& largest_user_key,
-    int level) const {
+    int level, bool enable_downforce_compaction) const {
   const Comparator* ucmp = icmp_->user_comparator();
   for (Compaction* c : compactions_in_progress_) {
     if (c->output_level() == level &&
@@ -268,9 +274,16 @@ bool CompactionPicker::RangeOverlapWithCompaction(
                                       c->GetLargestUserKey()) <= 0 &&
       ucmp->CompareWithoutTimestamp(largest_user_key,
                                     c->GetSmallestUserKey()) >= 0) {
-      // Overlap
-      if(level != 1) return false;
-      else return true;// return true;
+      // Overlap detected
+      if (enable_downforce_compaction) {
+        // DownForce mode: Replicate DF-Leveled buggy behavior for compatibility
+        // This allows parallel L0 compactions by incorrectly reporting no overlap for L0
+        if(level != 1) return false;  // Bug: L0 overlap reported as "no overlap"
+        else return true;
+      } else {
+        // Original RocksDB: Always return true when overlap is detected
+        return true;
+      }
     }
     if (c->SupportsPerKeyPlacement()) {
       if (c->OverlapPenultimateLevelOutputRange(smallest_user_key,
@@ -285,7 +298,7 @@ bool CompactionPicker::RangeOverlapWithCompaction(
 
 bool CompactionPicker::FilesRangeOverlapWithCompaction(
     const std::vector<CompactionInputFiles>& inputs, int level,
-    int penultimate_level) const {
+    int penultimate_level, bool enable_downforce_compaction) const {
   bool is_empty = true;
   for (auto& in : inputs) {
     if (!in.empty()) {
@@ -305,7 +318,7 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
   if (penultimate_level != Compaction::kInvalidLevel) {
     if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       if (RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                     penultimate_level)) {
+                                     penultimate_level, enable_downforce_compaction)) {
         return true;
       }
     } else {
@@ -313,14 +326,14 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
       GetRange(inputs, &penultimate_smallest, &penultimate_largest, level);
       if (RangeOverlapWithCompaction(penultimate_smallest.user_key(),
                                      penultimate_largest.user_key(),
-                                     penultimate_level)) {
+                                     penultimate_level, enable_downforce_compaction)) {
         return true;
       }
     }
   }
 
   return RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                    level);
+                                    level, enable_downforce_compaction);
 }
 
 // Returns true if any one of specified files are being compacted

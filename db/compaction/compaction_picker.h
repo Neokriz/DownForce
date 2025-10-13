@@ -140,7 +140,8 @@ class CompactionPicker {
   // that is currently running.
   bool RangeOverlapWithCompaction(const Slice& smallest_user_key,
                                   const Slice& largest_user_key,
-                                  int level) const;
+                                  int level,
+                                  bool enable_downforce_compaction = false) const;
 
   // Stores the minimal range that covers all entries in inputs in
   // *smallest, *largest.
@@ -177,7 +178,8 @@ class CompactionPicker {
   bool ExpandInputsToCleanCut(const std::string& cf_name,
                               VersionStorageInfo* vstorage,
                               CompactionInputFiles* inputs,
-                              InternalKey** next_smallest = nullptr);
+                              InternalKey** next_smallest = nullptr,
+                              bool enable_downforce_compaction = false);
 
   // Returns true if any one of the parent files are being compacted
   bool IsRangeInCompaction(VersionStorageInfo* vstorage,
@@ -188,7 +190,8 @@ class CompactionPicker {
   // key range of a currently running compaction.
   bool FilesRangeOverlapWithCompaction(
       const std::vector<CompactionInputFiles>& inputs, int level,
-      int penultimate_level) const;
+      int penultimate_level,
+      bool enable_downforce_compaction = false) const;
 
   bool SetupOtherInputs(const std::string& cf_name,
                         const MutableCFOptions& mutable_cf_options,
