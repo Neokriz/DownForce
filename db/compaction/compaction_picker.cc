@@ -259,7 +259,8 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
     if (!enable_downforce_compaction) {
       return false;  // Original RocksDB: abort if files are being compacted
     }
-    // DownForce: Continue despite files being in compaction
+    // DownForce: Continue despite files being in compaction (like DF-Leveled)
+    // return false;  // DF-Leveled: This line is commented out
   }
   return true;
 }
