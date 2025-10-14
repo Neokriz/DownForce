@@ -441,8 +441,7 @@ void MemTableList::PickMemtablesToFlush(uint64_t max_memtable_id,
       // if break is enable, IMM is off.
       // TODO: It seems to not perfectly working. SST files that bigger than target_file_size sometimes created.
       // We have to fix this problem.
-      if(cfd_options && cfd_options->enable_downforce_compaction && 
-         cfd_options->in_memory_merge == false){
+      if(cfd_options->in_memory_merge == false){
         break;
       }
     } else if (!ret->empty()) {

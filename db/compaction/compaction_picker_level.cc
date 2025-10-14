@@ -232,7 +232,9 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         // didn't find the compaction, clear the inputs
         start_level_inputs_.clear();
         if (start_level_ == 0) {
-          skipped_l0_to_base = true;
+          if(!mutable_cf_options_.disable_intra_l0_compaction){
+            skipped_l0_to_base = true; //Original Rocksdb
+          }
           
           // L0->base_level may be blocked due to ongoing L0->base_level
           // compactions. It may also be blocked by an ongoing compaction from
@@ -242,21 +244,21 @@ void LevelCompactionBuilder::SetupInitialFiles() {
           // of write stalls, we can attempt compacting a span of files within
           // L0.
           // DownForce: Allow disabling intra-L0 compaction
-          if(mutable_cf_options_.enable_downforce_compaction &&
-             mutable_cf_options_.disable_intra_l0_compaction == false){
+          if(mutable_cf_options_.disable_intra_l0_compaction == false){
             if (PickIntraL0Compaction()) {
               output_level_ = 0;
               compaction_reason_ = CompactionReason::kLevelL0FilesNum;
               break;
             }
-          } else if (!mutable_cf_options_.enable_downforce_compaction && skipped_l0_to_base) {
-            if(mutable_cf_options_.disable_intra_l0_compaction == false){ 
-              if (PickIntraL0Compaction()) {
-                output_level_ = 0;
-                compaction_reason_ = CompactionReason::kLevelL0FilesNum;
-                break;
-              }
-            }
+          // DownForce: Deprecated code area.
+          // } else if (!mutable_cf_options_.enable_downforce_compaction && skipped_l0_to_base) {
+          //   if(mutable_cf_options_.disable_intra_l0_compaction == false){ 
+          //     if (PickIntraL0Compaction()) {
+          //       output_level_ = 0;
+          //       compaction_reason_ = CompactionReason::kLevelL0FilesNum;
+          //       break;
+          //     }
+          //   }
           }
         }
       }
@@ -575,7 +577,8 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   // pull in more L0s.
   assert(!compaction_inputs_.empty());
 
-  if(compaction_inputs_.size() == 0){
+  // DownForce: -
+  if(mutable_cf_options_.enable_downforce_compaction && compaction_inputs_.size() == 0){
      return nullptr;
   }
 

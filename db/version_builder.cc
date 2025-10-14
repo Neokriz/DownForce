@@ -593,7 +593,7 @@ class VersionBuilder::Rep {
       for (int level = 1; level < num_levels_; ++level) {
         auto checker = [this, level, icmp](FileMetaData* lhs,
                                            FileMetaData* rhs) {
-                                          // above filemetadata parmeter made unconst, so we can modify it.
+                                          // above filemetadata parmeter made unconst, so we can modify it.(DownForce)
           assert(lhs);
           assert(rhs);
 
@@ -614,14 +614,19 @@ class VersionBuilder::Rep {
                 << " vs. file #" << rhs->fd.GetNumber()
                 << " smallest key: " << rhs->smallest.DebugString(true);
 
-            //return Status::Corruption("VersionBuilder", oss.str());
-            // DownForce: Mark overlapping files for compaction instead of returning error
-            // This allows temporary overlaps which will be resolved by subsequent compactions
-            if(!lhs->need_compaction){
-              lhs->need_compaction = true;
-            }
-            if(!rhs->need_compaction){
-              rhs->need_compaction = true;
+            // DownForce: Mark overlapping files for compaction when enabled
+            if (cfd_ && cfd_->GetLatestMutableCFOptions()->enable_downforce_compaction) {
+              // DownForce: Mark overlapping files for compaction instead of returning error
+              // This allows temporary overlaps which will be resolved by subsequent compactions
+              if(!lhs->need_compaction){
+                lhs->need_compaction = true;
+              }
+              if(!rhs->need_compaction){
+                rhs->need_compaction = true;
+              }
+            } else {
+              // Original RocksDB: Return error on overlap
+              return Status::Corruption("VersionBuilder", oss.str());
             }
           }
 

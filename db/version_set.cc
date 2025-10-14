@@ -7178,6 +7178,7 @@ InternalIterator* VersionSet::MakeInputIterator(
         }
       } else {
         // Original logic: Use LevelIterator for non-L0 levels
+        // Create concatenating iterator for the files from this level
         std::unique_ptr<TruncatedRangeDelIterator>** tombstone_iter_ptr =
             nullptr;
         list[num++] = new LevelIterator(
