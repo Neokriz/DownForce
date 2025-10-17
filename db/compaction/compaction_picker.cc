@@ -230,6 +230,11 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   if (level == 0) {
     return true;
   }
+  // DownForce mode: Ignore files being compacted (DF-Leveled compatibility)
+  // This allows parallel compactions even if files overlap
+  if (enable_downforce_compaction) {
+    return true;  // Original RocksDB: abort if files are being compacted
+  }
 
   InternalKey smallest, largest;
 
@@ -254,13 +259,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
   if (AreFilesInCompaction(inputs->files)) {
-    // DownForce mode: Ignore files being compacted (DF-Leveled compatibility)
-    // This allows parallel compactions even if files overlap
-    if (!enable_downforce_compaction) {
       return false;  // Original RocksDB: abort if files are being compacted
-    }
-    // DownForce: Continue despite files being in compaction (like DF-Leveled)
-    // return false;  // DF-Leveled: This line is commented out
   }
   return true;
 }
@@ -281,7 +280,9 @@ bool CompactionPicker::RangeOverlapWithCompaction(
         // This allows parallel L0 compactions by incorrectly reporting no overlap for L0
         if(level != 1) return false;  // Bug: L0 overlap reported as "no overlap"
         else return true;
-      } else {
+      } 
+      else { //no downforcecclab
+
         // Original RocksDB: Always return true when overlap is detected
         return true;
       }
@@ -507,12 +508,17 @@ bool CompactionPicker::SetupOtherInputs(
     return false;
   }
   if (!output_level_inputs->empty()) {
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
-      // DownForce: Allow L0 compaction to proceed even if inputs can't be expanded to clean cut
-      if(mutable_cf_options.enable_downforce_compaction && input_level == 0) {
-        return true;
+    if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs,
+                                /*next_smallest=*/nullptr,
+                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction)) {
+      
+      if(!mutable_cf_options.enable_downforce_compaction) {
+        return false; //Original RocksDB.
       }
-      return false;
+      // DownForce: Allow L0 compaction to proceed even if inputs can't be expanded to clean cut
+      else if(input_level == 0) {
+          return true;
+      }      
     }
   }
 
@@ -544,7 +550,9 @@ bool CompactionPicker::SetupOtherInputs(
                                      nullptr);
     }
     uint64_t expanded_inputs_size = TotalFileSize(expanded_inputs.files);
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs)) {
+    if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs,
+                                /*next_smallest=*/nullptr,
+                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction)) {
       try_overlapping_inputs = false;
     }
     // It helps to reduce write amp and avoid a further separate compaction
@@ -566,7 +574,9 @@ bool CompactionPicker::SetupOtherInputs(
       assert(!expanded_output_level_inputs.empty());
       if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
           ExpandInputsToCleanCut(cf_name, vstorage,
-                                 &expanded_output_level_inputs) &&
+                                 &expanded_output_level_inputs,
+                                /*next_smallest=*/nullptr,
+                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction) &&
           expanded_output_level_inputs.size() == output_level_inputs->size()) {
         expand_inputs = true;
       }
@@ -654,7 +664,7 @@ Compaction* CompactionPicker::CompactRange(
       return nullptr;
     }
 
-    // DownForce: Allow parallel L0 compactions
+    // DownForce: Allow parallel L0 compactions (DF-Leveled behavior)
     if (!mutable_cf_options.enable_downforce_compaction) {
       if ((start_level == 0) && (!level0_compactions_in_progress_.empty())) {
         *manual_conflict = true;
@@ -662,6 +672,7 @@ Compaction* CompactionPicker::CompactRange(
         return nullptr;
       }
     }
+    // DF-Leveled: L0 check is commented out, allowing parallel L0 compactions
 
     std::vector<CompactionInputFiles> inputs(max_output_level + 1 -
                                              start_level);
@@ -730,11 +741,15 @@ Compaction* CompactionPicker::CompactRange(
     return nullptr;
   }
 
-  if ((input_level == 0) && (!level0_compactions_in_progress_.empty())) {
-    // Only one level 0 compaction allowed
-    TEST_SYNC_POINT("CompactionPicker::CompactRange:Conflict");
-    *manual_conflict = true;
-    return nullptr;
+  // DownForce: Allow parallel L0 compactions (DF-Leveled behavior) maybe Universial here.
+  if (!mutable_cf_options.enable_downforce_compaction) {
+    if ((input_level == 0) && (!level0_compactions_in_progress_.empty())) {
+      // Only one level 0 compaction allowed
+      TEST_SYNC_POINT("CompactionPicker::CompactRange:Conflict");
+      *manual_conflict = true;
+      return nullptr;
+    }
+    // DF- 
   }
 
   // Avoid compacting too much in one shot in case the range is large.
@@ -820,7 +835,8 @@ Compaction* CompactionPicker::CompactRange(
 
   InternalKey key_storage;
   InternalKey* next_smallest = &key_storage;
-  if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+  if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest,
+                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction) ==
       false) {
     // manual compaction is now multi-threaded, so it can
     // happen that ExpandWhileOverlapping fails
@@ -1175,7 +1191,8 @@ void CompactionPicker::RegisterCompaction(Compaction* c) {
   assert(ioptions_.compaction_style != kCompactionStyleLevel ||
          c->output_level() == 0 ||
          !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level(),
-                                          c->GetPenultimateLevel()));
+                                          c->GetPenultimateLevel(),
+                                          c->mutable_cf_options().enable_downforce_compaction));
   // CompactionReason::kExternalSstIngestion's start level is just a placeholder
   // number without actual meaning as file ingestion technically does not have
   // an input level like other compactions
@@ -1203,7 +1220,8 @@ void CompactionPicker::UnregisterCompaction(Compaction* c) {
 void CompactionPicker::PickFilesMarkedForCompaction(
     const std::string& cf_name, VersionStorageInfo* vstorage, int* start_level,
     int* output_level, CompactionInputFiles* start_level_inputs,
-    std::function<bool(const FileMetaData*)> skip_marked_file) {
+    std::function<bool(const FileMetaData*)> skip_marked_file,
+    const MutableCFOptions& mutable_cf_options) {
   if (vstorage->FilesMarkedForCompaction().empty()) {
     return;
   }
@@ -1226,7 +1244,9 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 
     start_level_inputs->files = {level_file.second};
     start_level_inputs->level = *start_level;
-    return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
+    return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs,
+                                /*next_smallest=*/nullptr,
+                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction);
   };
 
   // take a chance on a random file first
@@ -1257,10 +1277,10 @@ bool CompactionPicker::GetOverlappingL0Files(
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
   
-  // DownForce: Skip assertion when parallel L0 compactions are allowed
-  if (!mutable_cf_options || !mutable_cf_options->enable_downforce_compaction) {
+  if (!mutable_cf_options->enable_downforce_compaction) {
     assert(level0_compactions_in_progress()->empty());
   }
+  // DownForce: Skip assertion when parallel L0 compactions are allowed
   
   InternalKey smallest, largest;
   GetRange(*start_level_inputs, &smallest, &largest);
@@ -1269,10 +1289,12 @@ bool CompactionPicker::GetOverlappingL0Files(
   // which will include the picked file.
 
   // DownForce: Allow L0 compactions to proceed even if others are in progress
-  if(mutable_cf_options && mutable_cf_options->enable_downforce_compaction &&
-     !level0_compactions_in_progress()->empty()) {
-    return true; // if always true, occur seg fault??
-  }
+    //mutable_cf_options && 
+  if(mutable_cf_options->enable_downforce_compaction) {
+    if(!level0_compactions_in_progress()->empty()) { // if always true, occur seg fault??
+      return true; // DF-Leveled behavior: return immediately when L0 compactions in progress
+    }
+  } 
 
   start_level_inputs->files.clear();
   vstorage->GetOverlappingInputs(0, &smallest, &largest,
