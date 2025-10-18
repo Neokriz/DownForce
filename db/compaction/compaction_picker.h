@@ -141,7 +141,7 @@ class CompactionPicker {
   bool RangeOverlapWithCompaction(const Slice& smallest_user_key,
                                   const Slice& largest_user_key,
                                   int level,
-                                  bool enable_downforce_compaction = false) const;
+                                  bool enable_downforce_compaction) const;
 
   // Stores the minimal range that covers all entries in inputs in
   // *smallest, *largest.
@@ -191,7 +191,7 @@ class CompactionPicker {
   bool FilesRangeOverlapWithCompaction(
       const std::vector<CompactionInputFiles>& inputs, int level,
       int penultimate_level,
-      bool enable_downforce_compaction = false) const;
+      bool enable_downforce_compaction) const;
 
   bool SetupOtherInputs(const std::string& cf_name,
                         const MutableCFOptions& mutable_cf_options,

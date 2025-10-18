@@ -1811,7 +1811,8 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
         }
         if (cfd->RangeOverlapWithCompaction(refit_level_smallest.user_key(),
                                             refit_level_largest.user_key(),
-                                            l)) {
+                                            l,
+                                            cfd->GetLatestMutableCFOptions()->enable_downforce_compaction)) {
           refitting_level_ = false;
           return Status::NotSupported(
               "Levels between source and target "
@@ -1835,7 +1836,8 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
         }
         if (cfd->RangeOverlapWithCompaction(refit_level_smallest.user_key(),
                                             refit_level_largest.user_key(),
-                                            l)) {
+                                            l,
+                                            mutable_cf_options.enable_downforce_compaction)) {
           refitting_level_ = false;
           return Status::NotSupported(
               "Levels between source and target "

@@ -423,7 +423,8 @@ class ColumnFamilyData {
   // REQUIRES: DB mutex held
   bool RangeOverlapWithCompaction(const Slice& smallest_user_key,
                                   const Slice& largest_user_key,
-                                  int level) const;
+                                  int level,
+                                  bool enable_downforce_compaction) const;
 
   // Check if the passed ranges overlap with any unflushed memtables
   // (immutable or mutable).

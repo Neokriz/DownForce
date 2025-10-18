@@ -249,7 +249,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
     inputs->clear();
     vstorage->GetOverlappingInputs(level, &smallest, &largest, &inputs->files,
                                    hint_index, &hint_index, true,
-                                   next_smallest);
+                                   next_smallest, enable_downforce_compaction);
   } while (inputs->size() > old_size);
 
   // we started off with inputs non-empty and the previous loop only grew
@@ -320,7 +320,8 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
   if (penultimate_level != Compaction::kInvalidLevel) {
     if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       if (RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                     penultimate_level, enable_downforce_compaction)) {
+                                     penultimate_level, 
+                                     enable_downforce_compaction)) {
         return true;
       }
     } else {
@@ -328,14 +329,16 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
       GetRange(inputs, &penultimate_smallest, &penultimate_largest, level);
       if (RangeOverlapWithCompaction(penultimate_smallest.user_key(),
                                      penultimate_largest.user_key(),
-                                     penultimate_level, enable_downforce_compaction)) {
+                                     penultimate_level, 
+                                     enable_downforce_compaction)) {
         return true;
       }
     }
   }
 
   return RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                    level, enable_downforce_compaction);
+                                    level, 
+                                    enable_downforce_compaction);
 }
 
 // Returns true if any one of specified files are being compacted
@@ -371,7 +374,9 @@ Compaction* CompactionPicker::CompactFiles(
                                   input_files, output_level,
                                   Compaction::EvaluatePenultimateLevel(
                                       vstorage, mutable_cf_options, ioptions_,
-                                      start_level, output_level)));
+                                      start_level, output_level,
+                                      mutable_cf_options.enable_downforce_compaction),
+                                  mutable_cf_options.enable_downforce_compaction));
 #endif /* !NDEBUG */
 
   CompressionType compression_type;
@@ -460,7 +465,7 @@ bool CompactionPicker::IsRangeInCompaction(VersionStorageInfo* vstorage,
   assert(level < NumberLevels());
 
   vstorage->GetOverlappingInputs(level, smallest, largest, &inputs,
-                                 level_index ? *level_index : 0, level_index);
+                                 level_index ? *level_index : 0, level_index, true, nullptr, false);
   return AreFilesInCompaction(inputs);
 }
 
@@ -503,7 +508,7 @@ bool CompactionPicker::SetupOtherInputs(
   // include in compaction
   vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
                                  &output_level_inputs->files, *parent_index,
-                                 parent_index);
+                                 parent_index, true, nullptr, mutable_cf_options.enable_downforce_compaction);
   if (AreFilesInCompaction(output_level_inputs->files)) {
     return false;
   }
@@ -543,11 +548,11 @@ bool CompactionPicker::SetupOtherInputs(
       // Round-robin compaction only allows expansion towards the larger side.
       vstorage->GetOverlappingInputs(input_level, &smallest, &all_limit,
                                      &expanded_inputs.files, base_index,
-                                     nullptr);
+                                     nullptr, true, nullptr, mutable_cf_options.enable_downforce_compaction);
     } else {
       vstorage->GetOverlappingInputs(input_level, &all_start, &all_limit,
                                      &expanded_inputs.files, base_index,
-                                     nullptr);
+                                     nullptr, true, nullptr, mutable_cf_options.enable_downforce_compaction);
     }
     uint64_t expanded_inputs_size = TotalFileSize(expanded_inputs.files);
     if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs,
@@ -570,7 +575,7 @@ bool CompactionPicker::SetupOtherInputs(
       expanded_output_level_inputs.level = output_level;
       vstorage->GetOverlappingInputs(output_level, &new_start, &new_limit,
                                      &expanded_output_level_inputs.files,
-                                     *parent_index, parent_index);
+                                     *parent_index, parent_index, true, nullptr, mutable_cf_options.enable_downforce_compaction);
       assert(!expanded_output_level_inputs.empty());
       if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
           ExpandInputsToCleanCut(cf_name, vstorage,
@@ -623,7 +628,7 @@ void CompactionPicker::GetGrandparents(
   // level after that has overlapping files)
   for (int level = output_level_inputs.level + 1; level < NumberLevels();
        level++) {
-    vstorage->GetOverlappingInputs(level, &start, &limit, grandparents);
+    vstorage->GetOverlappingInputs(level, &start, &limit, grandparents, -1, nullptr, true, nullptr, false);
     if (!grandparents->empty()) {
       break;
     }
@@ -694,7 +699,9 @@ Compaction* CompactionPicker::CompactRange(
             inputs, output_level,
             Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                  ioptions_, start_level,
-                                                 output_level))) {
+                                                 output_level,
+                                                 mutable_cf_options.enable_downforce_compaction),
+            mutable_cf_options.enable_downforce_compaction)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       *manual_conflict = true;
@@ -736,7 +743,7 @@ Compaction* CompactionPicker::CompactRange(
     end = nullptr;
   }
 
-  vstorage->GetOverlappingInputs(input_level, begin, end, &inputs.files);
+  vstorage->GetOverlappingInputs(input_level, begin, end, &inputs.files, -1, nullptr, true, nullptr, false);
   if (inputs.empty()) {
     return nullptr;
   }
@@ -773,7 +780,7 @@ Compaction* CompactionPicker::CompactRange(
       if (output_level < vstorage->num_non_empty_levels()) {
         std::vector<FileMetaData*> files;
         vstorage->GetOverlappingInputsRangeBinarySearch(
-            output_level, smallest, largest, &files, hint_index, &hint_index);
+            output_level, smallest, largest, &files, hint_index, &hint_index, false, nullptr, false);
         for (const auto& file : files) {
           output_level_total += file->fd.GetFileSize();
         }
@@ -887,7 +894,9 @@ Compaction* CompactionPicker::CompactRange(
           compaction_inputs, output_level,
           Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                ioptions_, input_level,
-                                               output_level))) {
+                                               output_level,
+                                               mutable_cf_options.enable_downforce_compaction),
+          mutable_cf_options.enable_downforce_compaction)) {
     // This compaction output could potentially conflict with the output
     // of a currently running compaction, we cannot run it.
     *manual_conflict = true;
@@ -1176,7 +1185,9 @@ Status CompactionPicker::SanitizeAndConvertCompactionInputFiles(
           *converted_input_files, output_level,
           Compaction::EvaluatePenultimateLevel(
               version->storage_info(), version->GetMutableCFOptions(),
-              ioptions_, (*converted_input_files)[0].level, output_level))) {
+              ioptions_, (*converted_input_files)[0].level, output_level,
+              version->GetMutableCFOptions().enable_downforce_compaction),
+          version->GetMutableCFOptions().enable_downforce_compaction)) {
     return Status::Aborted(
         "A running compaction is writing to the same output level(s) in an "
         "overlapping key range");
@@ -1192,7 +1203,7 @@ void CompactionPicker::RegisterCompaction(Compaction* c) {
          c->output_level() == 0 ||
          !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level(),
                                           c->GetPenultimateLevel(),
-                                          c->mutable_cf_options().enable_downforce_compaction));
+                                          c->mutable_cf_options()->enable_downforce_compaction));
   // CompactionReason::kExternalSstIngestion's start level is just a placeholder
   // number without actual meaning as file ingestion technically does not have
   // an input level like other compactions
@@ -1298,7 +1309,7 @@ bool CompactionPicker::GetOverlappingL0Files(
 
   start_level_inputs->files.clear();
   vstorage->GetOverlappingInputs(0, &smallest, &largest,
-                                 &(start_level_inputs->files));
+                                 &(start_level_inputs->files), -1, nullptr, true, nullptr, false);
 
   // If we include more L0 files in the same compaction run it can
   // cause the 'smallest' and 'largest' key to get extended to a

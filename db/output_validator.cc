@@ -25,7 +25,9 @@ Status OutputValidator::Add(const Slice& key, const Slice& value) {
     if (enable_downforce_compaction_) {
       return Status::OK();
     }
-    return Status::Corruption("Compaction sees out-of-order keys.");
+    else {
+      return Status::Corruption("Compaction sees out-of-order keys.");
+    }
   }
   prev_key_.assign(key.data(), key.size());
   return Status::OK();

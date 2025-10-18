@@ -1200,9 +1200,10 @@ Compaction* ColumnFamilyData::PickCompaction(
 
 bool ColumnFamilyData::RangeOverlapWithCompaction(
     const Slice& smallest_user_key, const Slice& largest_user_key,
-    int level) const {
+    int level, bool enable_downforce_compaction) const {
   return compaction_picker_->RangeOverlapWithCompaction(
-      smallest_user_key, largest_user_key, level);
+      smallest_user_key, largest_user_key, level,
+      enable_downforce_compaction);
 }
 
 Status ColumnFamilyData::RangesOverlapWithMemtables(

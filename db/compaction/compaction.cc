@@ -1000,7 +1000,8 @@ int Compaction::EvaluatePenultimateLevel(
     const VersionStorageInfo* vstorage,
     const MutableCFOptions& mutable_cf_options,
     const ImmutableOptions& immutable_options, const int start_level,
-    const int output_level) {
+    const int output_level, bool enable_downforce_compaction) {
+  (void)enable_downforce_compaction;  // Suppress unused parameter warning
   // TODO: currently per_key_placement feature only support level and universal
   //  compaction
   if (immutable_options.compaction_style != kCompactionStyleLevel &&

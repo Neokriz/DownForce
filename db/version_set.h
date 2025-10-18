@@ -268,7 +268,8 @@ class VersionStorageInfo {
       bool expand_range = true,   // if set, returns files which overlap the
                                   // range and overlap each other. If false,
                                   // then just files intersecting the range
-      InternalKey** next_smallest = nullptr)  // if non-null, returns the
+      InternalKey** next_smallest = nullptr,  // if non-null, returns the
+      bool enable_downforce_compaction = false)  // DownForce compaction mode
       const;  // smallest key of next file not included
   void GetCleanInputsWithinInterval(
       int level, const InternalKey* begin,  // nullptr means before all keys
@@ -286,7 +287,8 @@ class VersionStorageInfo {
       int hint_index,                // index of overlap file
       int* file_index,               // return index of overlap file
       bool within_interval = false,  // if set, force the inputs within interval
-      InternalKey** next_smallest = nullptr)  // if non-null, returns the
+      InternalKey** next_smallest = nullptr,  // if non-null, returns the
+      bool enable_downforce_compaction = false)  // DownForce compaction mode
       const;  // smallest key of next file not included
 
   // Returns true iff some file in the specified level overlaps

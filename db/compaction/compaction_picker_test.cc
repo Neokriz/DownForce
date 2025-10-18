@@ -3798,7 +3798,7 @@ TEST_F(CompactionPickerU64TsTest, Overlap) {
     std::string user_key_with_ts2(largest);
     PutFixed64(&user_key_with_ts2, ts_of_largest - 1);
     ASSERT_TRUE(level_compaction_picker.RangeOverlapWithCompaction(
-        user_key_with_ts1, user_key_with_ts2, level));
+        user_key_with_ts1, user_key_with_ts2, level, false));
   }
   {
     // [500, ts=60000] to [500, ts=60000] is the range to check.
@@ -3811,7 +3811,7 @@ TEST_F(CompactionPickerU64TsTest, Overlap) {
     std::string user_key_with_ts2(smallest);
     PutFixed64(&user_key_with_ts2, ts_of_smallest + 1);
     ASSERT_TRUE(level_compaction_picker.RangeOverlapWithCompaction(
-        user_key_with_ts1, user_key_with_ts2, level));
+        user_key_with_ts1, user_key_with_ts2, level, false));
   }
 }
 
@@ -3910,7 +3910,8 @@ TEST_P(PerKeyPlacementCompactionPickerTest, OverlapWithNormalCompaction) {
             level_compaction_picker.FilesRangeOverlapWithCompaction(
                 input_files, 6,
                 Compaction::EvaluatePenultimateLevel(
-                    vstorage_.get(), mutable_cf_options_, ioptions_, 0, 6)));
+                    vstorage_.get(), mutable_cf_options_, ioptions_, 0, 6, false),
+                false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest, NormalCompactionOverlap) {
@@ -3953,7 +3954,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, NormalCompactionOverlap) {
 
   ASSERT_EQ(enable_per_key_placement_,
             level_compaction_picker.FilesRangeOverlapWithCompaction(
-                input_files, 5, Compaction::kInvalidLevel));
+                input_files, 5, Compaction::kInvalidLevel, false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest,
@@ -3998,7 +3999,8 @@ TEST_P(PerKeyPlacementCompactionPickerTest,
             universal_compaction_picker.FilesRangeOverlapWithCompaction(
                 input_files, 6,
                 Compaction::EvaluatePenultimateLevel(
-                    vstorage_.get(), mutable_cf_options_, ioptions_, 0, 6)));
+                    vstorage_.get(), mutable_cf_options_, ioptions_, 0, 6, false),
+                false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest, NormalCompactionOverlapUniversal) {
@@ -4042,7 +4044,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, NormalCompactionOverlapUniversal) {
 
   ASSERT_EQ(enable_per_key_placement_,
             universal_compaction_picker.FilesRangeOverlapWithCompaction(
-                input_files, 5, Compaction::kInvalidLevel));
+                input_files, 5, Compaction::kInvalidLevel, false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest, PenultimateOverlapUniversal) {
@@ -4089,7 +4091,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, PenultimateOverlapUniversal) {
 
   ASSERT_EQ(enable_per_key_placement_,
             universal_compaction_picker.FilesRangeOverlapWithCompaction(
-                input_files, 5, Compaction::kInvalidLevel));
+                input_files, 5, Compaction::kInvalidLevel, false));
 
   // compacting the 3rd L4 file is always safe:
   input_set.clear();
@@ -4099,7 +4101,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, PenultimateOverlapUniversal) {
       &input_files, &input_set, vstorage_.get(), comp_options));
 
   ASSERT_FALSE(universal_compaction_picker.FilesRangeOverlapWithCompaction(
-      input_files, 5, Compaction::kInvalidLevel));
+      input_files, 5, Compaction::kInvalidLevel, false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest, LastLevelOnlyOverlapUniversal) {
@@ -4142,7 +4144,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, LastLevelOnlyOverlapUniversal) {
 
   ASSERT_EQ(enable_per_key_placement_,
             universal_compaction_picker.FilesRangeOverlapWithCompaction(
-                input_files, 5, Compaction::kInvalidLevel));
+                input_files, 5, Compaction::kInvalidLevel, false));
 
   // compacting the 3rd L4 file is always safe:
   input_set.clear();
@@ -4152,7 +4154,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest, LastLevelOnlyOverlapUniversal) {
       &input_files, &input_set, vstorage_.get(), comp_options));
 
   ASSERT_FALSE(universal_compaction_picker.FilesRangeOverlapWithCompaction(
-      input_files, 5, Compaction::kInvalidLevel));
+      input_files, 5, Compaction::kInvalidLevel, false));
 }
 
 TEST_P(PerKeyPlacementCompactionPickerTest,
@@ -4202,7 +4204,7 @@ TEST_P(PerKeyPlacementCompactionPickerTest,
       &input_files, &input_set, vstorage_.get(), comp_options));
 
   ASSERT_FALSE(universal_compaction_picker.FilesRangeOverlapWithCompaction(
-      input_files, 5, Compaction::kInvalidLevel));
+      input_files, 5, Compaction::kInvalidLevel, false));
 
   std::unique_ptr<Compaction> comp2(universal_compaction_picker.CompactFiles(
       comp_options, input_files, 5, vstorage_.get(), mutable_cf_options_,
@@ -4259,7 +4261,8 @@ TEST_P(PerKeyPlacementCompactionPickerTest,
             universal_compaction_picker.FilesRangeOverlapWithCompaction(
                 input_files, 6,
                 Compaction::EvaluatePenultimateLevel(
-                    vstorage_.get(), mutable_cf_options_, ioptions_, 6, 6)));
+                    vstorage_.get(), mutable_cf_options_, ioptions_, 6, 6, false),
+                false));
 
   if (!enable_per_key_placement_) {
     std::unique_ptr<Compaction> comp2(universal_compaction_picker.CompactFiles(
@@ -4319,7 +4322,8 @@ TEST_P(PerKeyPlacementCompactionPickerTest,
   ASSERT_FALSE(universal_compaction_picker.FilesRangeOverlapWithCompaction(
       input_files, 6,
       Compaction::EvaluatePenultimateLevel(vstorage_.get(), mutable_cf_options_,
-                                           ioptions_, 6, 6)));
+                                           ioptions_, 6, 6, false),
+      false));
 
   // 2 compactions can be run in parallel
   std::unique_ptr<Compaction> comp2(universal_compaction_picker.CompactFiles(

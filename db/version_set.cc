@@ -1729,7 +1729,7 @@ Status Version::GetPropertiesOfTablesInRange(
       InternalKey k2(range.limit, kMaxSequenceNumber, kValueTypeForSeek);
       std::vector<FileMetaData*> files;
       storage_info_.GetOverlappingInputs(level, &k1, &k2, &files, -1, nullptr,
-                                         false);
+                                         false, nullptr, false);
       for (const auto& file_meta : files) {
         auto fname =
             TableFileName(cfd_->ioptions()->cf_paths, file_meta->fd.GetNumber(),
@@ -4305,7 +4305,7 @@ bool VersionStorageInfo::OverlapInLevel(int level,
 void VersionStorageInfo::GetOverlappingInputs(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
-    bool expand_range, InternalKey** next_smallest) const {
+    bool expand_range, InternalKey** next_smallest, bool enable_downforce_compaction) const {
   if (level >= num_non_empty_levels_) {
     // this level is empty, no overlapping inputs
     return;
@@ -4318,7 +4318,7 @@ void VersionStorageInfo::GetOverlappingInputs(
   const Comparator* user_cmp = user_comparator_;
   if (level > 0) {
     GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs, hint_index,
-                                          file_index, false, next_smallest);
+                                          file_index, false, next_smallest, enable_downforce_compaction);
     return;
   }
 
@@ -4407,7 +4407,7 @@ void VersionStorageInfo::GetCleanInputsWithinInterval(
   }
 
   GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs, hint_index,
-                                        file_index, true /* within_interval */);
+                                        file_index, true /* within_interval */, nullptr, false);
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
@@ -4420,7 +4420,7 @@ void VersionStorageInfo::GetCleanInputsWithinInterval(
 void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
-    bool within_interval, InternalKey** next_smallest) const {
+    bool within_interval, InternalKey** next_smallest, bool enable_downforce_compaction) const {
   assert(level > 0);
 
   auto user_cmp = user_comparator_;
@@ -4502,35 +4502,38 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     *file_index = start_index;
   }
 
-  // DownForce: if input leve is 1, search all files and put files that need compaction into inputs. (in two steps)
-  // DownForce: Check if level 1 has files marked for compaction due to overlaps
-  bool level1_has_overlaps = false;
-  if(level == 1){
-    for(int i = 0; i < (int)files_[level].size(); i++){
-      if(files_[level][i]->need_compaction){
-        level1_has_overlaps = true;
-        break;
+  if (enable_downforce_compaction) {
+    // DownForce: if input level is 1, search all files and put files that need compaction into inputs. (in two steps)
+    // DownForce: Check if level 1 has files marked for compaction due to overlaps
+    bool level1_has_overlaps = false;
+    if(level == 1){
+      for(int i = 0; i < (int)files_[level].size(); i++){
+        if(files_[level][i]->need_compaction){
+          level1_has_overlaps = true;
+          break;
+        }
       }
     }
-  }
 
-  // DownForce: If level 1 has overlap markers, select all files that need compaction
-  if(level == 1 && level1_has_overlaps){
-    for(int i = 0; i < (int)files_[level].size(); i++){
-      if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
-        inputs->push_back(files_[level][i]);
+    // DownForce: If level 1 has overlap markers, select all files that need compaction
+    if(level == 1 && level1_has_overlaps){
+      for(int i = 0; i < (int)files_[level].size(); i++){
+        if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
+          inputs->push_back(files_[level][i]);
+      }
     }
-  }
-  else{
-    // insert overlapping files into vector
+    else{
+      // insert overlapping files into vector
+      for (int i = start_index; i < end_index; i++) {
+        // DownForce: Skip files being compacted for better parallelism
+        if(!files_[level][i]->being_compacted)
+          inputs->push_back(files_[level][i]);
+      }
+    }
+  } else {
+    // Original RocksDB behavior: insert overlapping files into vector
     for (int i = start_index; i < end_index; i++) {
-      //original codes
-      // inputs->push_back(files_[level][i]);
-      // Put SST file that not being compacted.
-
-      // DownForce: Skip files being compacted for better parallelism
-      if(!files_[level][i]->being_compacted)
-        inputs->push_back(files_[level][i]);
+      inputs->push_back(files_[level][i]);
     }
   }
   if (next_smallest != nullptr) {
@@ -4690,7 +4693,7 @@ uint64_t VersionStorageInfo::MaxNextLevelOverlappingBytes() {
   std::vector<FileMetaData*> overlaps;
   for (int level = 1; level < num_levels() - 1; level++) {
     for (const auto& f : files_[level]) {
-      GetOverlappingInputs(level + 1, &f->smallest, &f->largest, &overlaps);
+      GetOverlappingInputs(level + 1, &f->smallest, &f->largest, &overlaps, -1, nullptr, true, nullptr, false);
       const uint64_t sum = TotalFileSize(overlaps);
       if (sum > result) {
         result = sum;
