@@ -376,8 +376,7 @@ Compaction* CompactionPicker::CompactFiles(
                                   input_files, output_level,
                                   Compaction::EvaluatePenultimateLevel(
                                       vstorage, mutable_cf_options, ioptions_,
-                                      start_level, output_level,
-                                      mutable_cf_options.enable_downforce_compaction),
+                                      start_level, output_level),
                                   mutable_cf_options.enable_downforce_compaction));
 #endif /* !NDEBUG */
 
@@ -701,8 +700,7 @@ Compaction* CompactionPicker::CompactRange(
             inputs, output_level,
             Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                  ioptions_, start_level,
-                                                 output_level,
-                                                 mutable_cf_options.enable_downforce_compaction),
+                                                 output_level),
             mutable_cf_options.enable_downforce_compaction)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
@@ -896,8 +894,7 @@ Compaction* CompactionPicker::CompactRange(
           compaction_inputs, output_level,
           Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                ioptions_, input_level,
-                                               output_level,
-                                               mutable_cf_options.enable_downforce_compaction),
+                                               output_level),
           mutable_cf_options.enable_downforce_compaction)) {
     // This compaction output could potentially conflict with the output
     // of a currently running compaction, we cannot run it.
@@ -1187,8 +1184,7 @@ Status CompactionPicker::SanitizeAndConvertCompactionInputFiles(
           *converted_input_files, output_level,
           Compaction::EvaluatePenultimateLevel(
               version->storage_info(), version->GetMutableCFOptions(),
-              ioptions_, (*converted_input_files)[0].level, output_level,
-              version->GetMutableCFOptions().enable_downforce_compaction),
+              ioptions_, (*converted_input_files)[0].level, output_level),
           version->GetMutableCFOptions().enable_downforce_compaction)) {
     return Status::Aborted(
         "A running compaction is writing to the same output level(s) in an "

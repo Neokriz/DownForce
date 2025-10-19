@@ -906,14 +906,16 @@ bool Compaction::ShouldFormSubcompactions() const {
   }
 
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {
-    // DownForce: Allow sub-compaction for L1+ compactions
-    if (mutable_cf_options_.enable_downforce_compaction) {
-      if(start_level_ > 0) return true;
-      else return false;
-    } else {
+    if(!mutable_cf_options_.enable_downforce_compaction) {      
       // Original logic
       return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
     }
+    else{
+      // DownForce: Allow sub-compaction for L1+ compactions
+      if(start_level_ > 0) return true;
+      else return false;
+    }
+
   } else if (cfd_->ioptions()->compaction_style == kCompactionStyleUniversal) {
     return number_levels_ > 1 && output_level_ > 0;
   } else {
@@ -1000,8 +1002,8 @@ int Compaction::EvaluatePenultimateLevel(
     const VersionStorageInfo* vstorage,
     const MutableCFOptions& mutable_cf_options,
     const ImmutableOptions& immutable_options, const int start_level,
-    const int output_level, bool enable_downforce_compaction) {
-  (void)enable_downforce_compaction;  // Suppress unused parameter warning
+    const int output_level) {
+  //(void)enable_downforce_compaction;  // Suppress unused parameter warning
   // TODO: currently per_key_placement feature only support level and universal
   //  compaction
   if (immutable_options.compaction_style != kCompactionStyleLevel &&

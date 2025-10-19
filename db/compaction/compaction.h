@@ -454,7 +454,7 @@ class Compaction {
       const VersionStorageInfo* vstorage,
       const MutableCFOptions& mutable_cf_options,
       const ImmutableOptions& immutable_options, const int start_level,
-      const int output_level, bool enable_downforce_compaction = false);
+      const int output_level);
 
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool being_compacted) const;

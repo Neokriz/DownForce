@@ -437,8 +437,7 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
             {tmp_start_level_inputs}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_,
-                                                 mutable_cf_options_.enable_downforce_compaction),
+                                                 output_level_),
             mutable_cf_options_.enable_downforce_compaction)) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
@@ -516,8 +515,7 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
             compaction_inputs_, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_,
-                                                 mutable_cf_options_.enable_downforce_compaction),
+                                                 output_level_),
             mutable_cf_options_.enable_downforce_compaction)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
@@ -550,7 +548,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
       return nullptr;
     }
     // DownForce: Allow L0 compaction to proceed
-    else if(start_level_ != 0) {
+    if(mutable_cf_options_.enable_downforce_compaction && start_level_ != 0) {
       return nullptr;
     }
     // Continue
@@ -564,7 +562,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
       return nullptr;
     }
     // DownForce: Allow L0 compaction to proceed
-    else if(start_level_ != 0) {
+    if(mutable_cf_options_.enable_downforce_compaction && start_level_ != 0) {
       return nullptr;
     }
       // Continue
@@ -575,7 +573,8 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
 
   // DownForce: Ensure we have enough files to compact
   if(mutable_cf_options_.enable_downforce_compaction &&
-     (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
+    //  (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
+    (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
     return nullptr;
   }
 
@@ -916,8 +915,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
             {start_level_inputs_}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_,
-                                                 mutable_cf_options_.enable_downforce_compaction),
+                                                 output_level_),
             mutable_cf_options_.enable_downforce_compaction)) {
       // A locked (pending compaction) input-level file was pulled in due to
       // user-key overlap.

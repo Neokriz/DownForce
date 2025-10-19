@@ -567,14 +567,14 @@ class VersionBuilder::Rep {
               }
             }
 
-            if (!level_zero_cmp_by_epochno_->operator()(lhs, rhs)) {
-              std::ostringstream oss;
-              oss << "L0 files are not sorted properly: files #"
-                  << lhs->fd.GetNumber() << " with epoch number "
-                  << lhs->epoch_number << ", #" << rhs->fd.GetNumber()
-                  << " with epoch number " << rhs->epoch_number;
-              return Status::Corruption("VersionBuilder", oss.str());
-            }
+          if (!level_zero_cmp_by_epochno_->operator()(lhs, rhs)) {
+            std::ostringstream oss;
+            oss << "L0 files are not sorted properly: files #"
+                << lhs->fd.GetNumber() << " with epoch number "
+                << lhs->epoch_number << ", #" << rhs->fd.GetNumber()
+                << " with epoch number " << rhs->epoch_number;
+            return Status::Corruption("VersionBuilder", oss.str());
+          }
           }
 
           return Status::OK();

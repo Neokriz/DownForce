@@ -3558,7 +3558,13 @@ void VersionStorageInfo::ComputeCompactionScore(
       for (auto f : files_[level]) {
         level_total_bytes += f->fd.GetFileSize();
         if (!f->being_compacted) {
-          level_bytes_no_compacting += f->compensated_file_size;
+          if (mutable_cf_options.enable_downforce_compaction) {
+            // DownForce: Use actual file size for better compaction triggering
+            level_bytes_no_compacting += f->fd.GetFileSize();
+          } else {
+            // Original RocksDB: Use compensated file size
+            level_bytes_no_compacting += f->compensated_file_size;
+          }
         }
       }
       if (!immutable_options.level_compaction_dynamic_level_bytes) {
@@ -4516,8 +4522,8 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     // }
 
     // DownForce: If level 1 has overlap markers, select all files that need compaction
-    //if(level == 1 && level1_has_overlaps){
     if(level == 1){
+      // DownForce: Pick only need_compaction marked files for compaction
       for(int i = 0; i < (int)files_[level].size(); i++){
         if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
           inputs->push_back(files_[level][i]);
