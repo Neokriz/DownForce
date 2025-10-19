@@ -230,11 +230,11 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   if (level == 0) {
     return true;
   }
-  // DownForce mode: Ignore files being compacted (DF-Leveled compatibility)
-  // This allows parallel compactions even if files overlap
-  if (enable_downforce_compaction) {
-    return true;  // Original RocksDB: abort if files are being compacted
-  }
+  // // DownForce mode: Ignore files being compacted (DF-Leveled compatibility)
+  // // This allows parallel compactions even if files overlap
+  // if (enable_downforce_compaction) {
+  //   return true;  // Original RocksDB: abort if files are being compacted
+  // }
 
   InternalKey smallest, largest;
 
@@ -259,7 +259,10 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
   if (AreFilesInCompaction(inputs->files)) {
+    if(!enable_downforce_compaction) {
       return false;  // Original RocksDB: abort if files are being compacted
+    }
+    // DownForce: //return false; 
   }
   return true;
 }
@@ -275,17 +278,16 @@ bool CompactionPicker::RangeOverlapWithCompaction(
       ucmp->CompareWithoutTimestamp(largest_user_key,
                                     c->GetSmallestUserKey()) >= 0) {
       // Overlap detected
-      if (enable_downforce_compaction) {
-        // DownForce mode: Replicate DF-Leveled buggy behavior for compatibility
-        // This allows parallel L0 compactions by incorrectly reporting no overlap for L0
-        if(level != 1) return false;  // Bug: L0 overlap reported as "no overlap"
-        else return true;
-      } 
-      else { //no downforcecclab
-
+      if (!enable_downforce_compaction) {
         // Original RocksDB: Always return true when overlap is detected
         return true;
       }
+      else {
+        // DownForce mode: Replicate DF-Leveled buggy behavior for compatibility
+        // This allows parallel L0 compactions by incorrectly reporting no overlap for L0
+        if(level != 1) return false;  // note: L0 overlap reported as "no overlap"
+        else return true;
+      } 
     }
     if (c->SupportsPerKeyPlacement()) {
       if (c->OverlapPenultimateLevelOutputRange(smallest_user_key,
@@ -521,8 +523,8 @@ bool CompactionPicker::SetupOtherInputs(
         return false; //Original RocksDB.
       }
       // DownForce: Allow L0 compaction to proceed even if inputs can't be expanded to clean cut
-      else if(input_level == 0) {
-          return true;
+      if(input_level == 0) {
+        return true;
       }      
     }
   }

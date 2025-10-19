@@ -564,7 +564,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
       return nullptr;
     }
     // DownForce: Allow L0 compaction to proceed
-    if(start_level_ != 0) {
+    else if(start_level_ != 0) {
       return nullptr;
     }
       // Continue
@@ -575,7 +575,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
 
   // DownForce: Ensure we have enough files to compact
   if(mutable_cf_options_.enable_downforce_compaction &&
-     start_level_inputs_.size() + output_level_inputs_.size() <= 1) {
+     (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
     return nullptr;
   }
 

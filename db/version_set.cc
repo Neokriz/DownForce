@@ -4505,18 +4505,19 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
   if (enable_downforce_compaction) {
     // DownForce: if input level is 1, search all files and put files that need compaction into inputs. (in two steps)
     // DownForce: Check if level 1 has files marked for compaction due to overlaps
-    bool level1_has_overlaps = false;
-    if(level == 1){
-      for(int i = 0; i < (int)files_[level].size(); i++){
-        if(files_[level][i]->need_compaction){
-          level1_has_overlaps = true;
-          break;
-        }
-      }
-    }
+    // bool level1_has_overlaps = false;
+    // if(level == 1){
+    //   for(int i = 0; i < (int)files_[level].size(); i++){
+    //     if(files_[level][i]->need_compaction){
+    //       level1_has_overlaps = true;
+    //       break;
+    //     }
+    //   }
+    // }
 
     // DownForce: If level 1 has overlap markers, select all files that need compaction
-    if(level == 1 && level1_has_overlaps){
+    //if(level == 1 && level1_has_overlaps){
+    if(level == 1){
       for(int i = 0; i < (int)files_[level].size(); i++){
         if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
           inputs->push_back(files_[level][i]);
