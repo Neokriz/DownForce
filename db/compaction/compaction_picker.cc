@@ -523,14 +523,14 @@ bool CompactionPicker::SetupOtherInputs(
   // include in compaction
   vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
                                  &output_level_inputs->files, *parent_index,
-                                 parent_index, true, nullptr, mutable_cf_options.enable_downforce_compaction);
+                                 parent_index, true, nullptr, DownforceEnabled());
   if (AreFilesInCompaction(output_level_inputs->files)) {
     return false;
   }
   if (!output_level_inputs->empty()) {
     if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs,
                                 /*next_smallest=*/nullptr,
-                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction)) {
+                                /*enable_downforce_compaction*/DownforceEnabled())) {
       
       if(!mutable_cf_options.enable_downforce_compaction) {
         return false; //Original RocksDB.
@@ -563,16 +563,16 @@ bool CompactionPicker::SetupOtherInputs(
       // Round-robin compaction only allows expansion towards the larger side.
       vstorage->GetOverlappingInputs(input_level, &smallest, &all_limit,
                                      &expanded_inputs.files, base_index,
-                                     nullptr, true, nullptr, mutable_cf_options.enable_downforce_compaction);
+                                     nullptr, true, nullptr, DownforceEnabled());
     } else {
       vstorage->GetOverlappingInputs(input_level, &all_start, &all_limit,
                                      &expanded_inputs.files, base_index,
-                                     nullptr, true, nullptr, mutable_cf_options.enable_downforce_compaction);
+                                     nullptr, true, nullptr, DownforceEnabled());
     }
     uint64_t expanded_inputs_size = TotalFileSize(expanded_inputs.files);
     if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs,
                                 /*next_smallest=*/nullptr,
-                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction)) {
+                                /*enable_downforce_compaction*/DownforceEnabled())) {
       try_overlapping_inputs = false;
     }
     // It helps to reduce write amp and avoid a further separate compaction
@@ -590,13 +590,13 @@ bool CompactionPicker::SetupOtherInputs(
       expanded_output_level_inputs.level = output_level;
       vstorage->GetOverlappingInputs(output_level, &new_start, &new_limit,
                                      &expanded_output_level_inputs.files,
-                                     *parent_index, parent_index, true, nullptr, mutable_cf_options.enable_downforce_compaction);
+                                     *parent_index, parent_index, true, nullptr, DownforceEnabled());
       assert(!expanded_output_level_inputs.empty());
       if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
           ExpandInputsToCleanCut(cf_name, vstorage,
                                  &expanded_output_level_inputs,
                                 /*next_smallest=*/nullptr,
-                                /*enable_downforce_compaction*/mutable_cf_options.enable_downforce_compaction) &&
+                                /*enable_downforce_compaction*/DownforceEnabled()) &&
           expanded_output_level_inputs.size() == output_level_inputs->size()) {
         expand_inputs = true;
       }

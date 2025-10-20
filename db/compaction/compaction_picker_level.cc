@@ -211,6 +211,7 @@ void LevelCompactionBuilder::PickFileToCompact(
 }
 
 void LevelCompactionBuilder::SetupInitialFiles() {
+  const bool enable_downforce = compaction_picker_->DownforceEnabled();
   // printf("[DEBUG] compaction_picker_level.cc:SetupInitialFiles - starting\n");
   // Find the compactions by size on all levels.
   bool skipped_l0_to_base = false;
@@ -250,7 +251,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         if (start_level_ == 0) {
           // DownForce: When enabled, skip setting skipped_l0_to_base (DF-Leveled behavior)
           // When disabled, use original RocksDB behavior
-          if (!mutable_cf_options_.enable_downforce_compaction) {
+          if (!enable_downforce) {
             // // printf("[DEBUG] compaction_picker_level.cc:238 - enable_downforce_compaction=false, setting skipped_l0_to_base=true (Original RocksDB)\n");
             skipped_l0_to_base = true; // Original RocksDB
           } else {
@@ -424,7 +425,7 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
   CompactionInputFiles output_level_inputs;
   output_level_inputs.level = output_level_;
   vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                  &output_level_inputs.files, -1, nullptr, true, nullptr, mutable_cf_options_.enable_downforce_compaction);
+                                  &output_level_inputs.files, -1, nullptr, true, nullptr, compaction_picker_->DownforceEnabled());
   if (output_level_inputs.empty()) {
     if (TryExtendNonL0TrivialMove((int)start_index,
                                   true /* only_expand_right */)) {
@@ -450,13 +451,13 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
     tmp_start_level_inputs.files.push_back(f);
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
                                                     &tmp_start_level_inputs, nullptr,
-                                                    mutable_cf_options_.enable_downforce_compaction) ||
+                                                    compaction_picker_->DownforceEnabled()) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {tmp_start_level_inputs}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
                                                  output_level_),
-            mutable_cf_options_.enable_downforce_compaction)) {
+            compaction_picker_->DownforceEnabled())) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
       return;
@@ -470,7 +471,7 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
     // Check whether any output level files are locked
     compaction_picker_->GetRange(tmp_start_level_inputs, &smallest, &largest);
     vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                    &output_level_inputs.files, -1, nullptr, true, nullptr, mutable_cf_options_.enable_downforce_compaction);
+                                    &output_level_inputs.files, -1, nullptr, true, nullptr, compaction_picker_->DownforceEnabled());
     if (!output_level_inputs.empty() &&
         !compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
                                                     &output_level_inputs, nullptr,
@@ -534,7 +535,7 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
                                                  output_level_),
-            mutable_cf_options_.enable_downforce_compaction)) {
+            compaction_picker_->DownforceEnabled())) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       return false;
@@ -562,12 +563,12 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
     // Original RocksDB behavior
-    if(!mutable_cf_options_.enable_downforce_compaction) {
+    if(!compaction_picker_->DownforceEnabled()) {
       // // printf("[DEBUG] compaction_picker_level.cc:550 - enable_downforce_compaction=false, returning nullptr (Original RocksDB behavior)\n");
       return nullptr;
     }
     // DownForce: Allow L0 compaction to proceed
-    if(mutable_cf_options_.enable_downforce_compaction && start_level_ != 0) {
+    if(compaction_picker_->DownforceEnabled() && start_level_ != 0) {
       // // printf("[DEBUG] compaction_picker_level.cc:554 - enable_downforce_compaction=true and start_level_!=0, returning nullptr\n");
       return nullptr;
     }
@@ -579,12 +580,12 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // if needed.
   if (!SetupOtherInputsIfNeeded()) {
     // Original RocksDB behavior
-    if(!mutable_cf_options_.enable_downforce_compaction) {
+    if(!compaction_picker_->DownforceEnabled()) {
       // // printf("[DEBUG] compaction_picker_level.cc:565 - enable_downforce_compaction=false, returning nullptr (Original RocksDB behavior)\n");
       return nullptr;
     }
     // DownForce: Allow L0 compaction to proceed
-    if(mutable_cf_options_.enable_downforce_compaction && start_level_ != 0) {
+    if(compaction_picker_->DownforceEnabled() && start_level_ != 0) {
       // // printf("[DEBUG] compaction_picker_level.cc:569 - enable_downforce_compaction=true and start_level_!=0, returning nullptr\n");
       return nullptr;
     }
@@ -596,7 +597,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   Compaction* c = GetCompaction();
 
   // DownForce: Ensure we have enough files to compact
-  if(mutable_cf_options_.enable_downforce_compaction &&
+  if(compaction_picker_->DownforceEnabled() &&
     //  (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
     (start_level_inputs_.size() + output_level_inputs_.size() <= 1)) {
     // // printf("[DEBUG] compaction_picker_level.cc:584 - enable_downforce_compaction=true, not enough files to compact, returning nullptr\n");
@@ -618,7 +619,7 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   assert(!compaction_inputs_.empty());
 
   // DownForce: -
-  if(mutable_cf_options_.enable_downforce_compaction && compaction_inputs_.size() == 0){
+  if(compaction_picker_->DownforceEnabled() && compaction_inputs_.size() == 0){
      return nullptr;
   }
 
@@ -873,7 +874,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   // being compacted at level 0.
 
   // Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = mutable_cf_options_.enable_downforce_compaction;
+  const bool enable_downforce = compaction_picker_->DownforceEnabled();
 
   // DownForce: When enabled, skip L0 concurrent compaction check (DF-Leveled behavior)
   // When disabled, use original RocksDB behavior
@@ -1005,9 +1006,9 @@ bool LevelCompactionBuilder::PickFileToCompact() {
         break;
       }
     } else {
-      if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
-                                                      &output_level_inputs, nullptr,
-                                                      mutable_cf_options_.enable_downforce_compaction)) {
+    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+                                                    &output_level_inputs, nullptr,
+                                                    compaction_picker_->DownforceEnabled())) {
         start_level_inputs_.clear();
         if (ioptions_.compaction_pri == kRoundRobin) {
           return false;

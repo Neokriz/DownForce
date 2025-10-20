@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "db/compaction/compaction.h"
+#include "db/compaction/compaction_strategy.h"
 #include "db/snapshot_checker.h"
 #include "db/version_set.h"
 #include "options/cf_options.h"
@@ -50,6 +51,15 @@ class CompactionPicker {
   CompactionPicker(const ImmutableOptions& ioptions,
                    const InternalKeyComparator* icmp);
   virtual ~CompactionPicker();
+
+  // Strategy access (branchless hot path flag)
+  inline bool DownforceEnabled() const {
+    return compaction_strategy_ && compaction_strategy_->DownforceEnabled();
+  }
+
+  void SetCompactionStrategy(ICompactionStrategy* strategy) {
+    compaction_strategy_ = strategy;
+  }
 
   // Pick level and inputs for a new compaction.
   //
@@ -251,6 +261,7 @@ class CompactionPicker {
   std::unordered_set<Compaction*> compactions_in_progress_;
 
   const InternalKeyComparator* const icmp_;
+  ICompactionStrategy* compaction_strategy_ = nullptr;
 };
 
 // A dummy compaction that never triggers any automatic

@@ -601,6 +601,14 @@ ColumnFamilyData::ColumnFamilyData(
     if (ioptions_.compaction_style == kCompactionStyleLevel) {
       compaction_picker_.reset(
           new LevelCompactionPicker(ioptions_, &internal_comparator_));
+      // Bind compaction strategy once per CF to eliminate hot-path branching
+      if (mutable_cf_options_.enable_downforce_compaction) {
+        static DFCompactionStrategy df_strategy_singleton;
+        compaction_picker_->SetCompactionStrategy(&df_strategy_singleton);
+      } else {
+        static OriginalCompactionStrategy original_strategy_singleton;
+        compaction_picker_->SetCompactionStrategy(&original_strategy_singleton);
+      }
     } else if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       compaction_picker_.reset(
           new UniversalCompactionPicker(ioptions_, &internal_comparator_));
