@@ -1813,6 +1813,8 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
                                             refit_level_largest.user_key(),
                                             l,
                                             cfd->GetLatestMutableCFOptions()->enable_downforce_compaction)) {
+          // // printf("[DEBUG] db_impl_compaction_flush.cc:1815 - enable_downforce_compaction=%s, RangeOverlapWithCompaction returned true, refitting_level_=false\n", 
+          //        cfd->GetLatestMutableCFOptions()->enable_downforce_compaction ? "true" : "false");
           refitting_level_ = false;
           return Status::NotSupported(
               "Levels between source and target "
@@ -1838,6 +1840,8 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
                                             refit_level_largest.user_key(),
                                             l,
                                             mutable_cf_options.enable_downforce_compaction)) {
+          // // printf("[DEBUG] db_impl_compaction_flush.cc:1840 - enable_downforce_compaction=%s, RangeOverlapWithCompaction returned true, refitting_level_=false\n", 
+          //        mutable_cf_options.enable_downforce_compaction ? "true" : "false");
           refitting_level_ = false;
           return Status::NotSupported(
               "Levels between source and target "

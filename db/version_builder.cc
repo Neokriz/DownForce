@@ -616,10 +616,12 @@ class VersionBuilder::Rep {
 
             if (!(cfd_->GetLatestMutableCFOptions()->enable_downforce_compaction)) {
               // Original RocksDB: Return error on overlap
+              // // printf("[DEBUG] version_builder.cc:617 - enable_downforce_compaction=false, returning error for overlapping ranges\n");
               return Status::Corruption("VersionBuilder", oss.str());
               }
             // DownForce: Mark overlapping files for compaction when enabled
             } else {
+              // // printf("[DEBUG] version_builder.cc:622 - enable_downforce_compaction=true, marking overlapping files for compaction\n");
               // DownForce: Mark overlapping files for compaction instead of returning error
               // This allows temporary overlaps which will be resolved by subsequent compactions
               if(!lhs->need_compaction){

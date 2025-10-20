@@ -1000,6 +1000,8 @@ Compaction* UniversalCompactionBuilder::PickCompactionToReduceSortedRuns(
                                    vstorage_, mutable_cf_options_, ioptions_,
                                    start_level, output_level),
                                mutable_cf_options_.enable_downforce_compaction)) {
+    // // printf("[DEBUG] compaction_picker_universal.cc:1002 - enable_downforce_compaction=%s, FilesRangeOverlapWithCompaction returned true, returning nullptr\n", 
+    //        mutable_cf_options_.enable_downforce_compaction ? "true" : "false");
     return nullptr;
   }
   CompactionReason compaction_reason;
@@ -1350,6 +1352,8 @@ Compaction* UniversalCompactionBuilder::PickIncrementalForReduceSizeAmp(
                                    vstorage_, mutable_cf_options_, ioptions_,
                                    start_level, output_level),
                                mutable_cf_options_.enable_downforce_compaction)) {
+    // // printf("[DEBUG] compaction_picker_universal.cc:1352 - enable_downforce_compaction=%s, FilesRangeOverlapWithCompaction returned true, returning nullptr\n", 
+    //        mutable_cf_options_.enable_downforce_compaction ? "true" : "false");
     return nullptr;
   }
 
@@ -1493,6 +1497,8 @@ Compaction* UniversalCompactionBuilder::PickDeleteTriggeredCompaction() {
                   vstorage_, mutable_cf_options_, ioptions_, start_level,
                   output_level),
               mutable_cf_options_.enable_downforce_compaction)) {
+        // // printf("[DEBUG] compaction_picker_universal.cc:1495 - enable_downforce_compaction=%s, FilesRangeOverlapWithCompaction returned true, returning nullptr\n", 
+        //        mutable_cf_options_.enable_downforce_compaction ? "true" : "false");
         return nullptr;
       }
 
@@ -1598,6 +1604,8 @@ Compaction* UniversalCompactionBuilder::PickCompactionWithSortedRunRange(
                                    vstorage_, mutable_cf_options_, ioptions_,
                                    start_level, output_level),
                                mutable_cf_options_.enable_downforce_compaction)) {
+    // // printf("[DEBUG] compaction_picker_universal.cc:1600 - enable_downforce_compaction=%s, FilesRangeOverlapWithCompaction returned true, returning nullptr\n", 
+    //        mutable_cf_options_.enable_downforce_compaction ? "true" : "false");
     return nullptr;
   }
 

@@ -1108,6 +1108,8 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
     if (cfd_->RangeOverlapWithCompaction(file_to_ingest->start_ukey,
                                          file_to_ingest->limit_ukey, lvl,
                                         cfd_->GetLatestMutableCFOptions()->enable_downforce_compaction)) {
+      // // printf("[DEBUG] external_sst_file_ingestion_job.cc:1110 - enable_downforce_compaction=%s, RangeOverlapWithCompaction returned true, overlap_with_db=true\n", 
+      //        cfd_->GetLatestMutableCFOptions()->enable_downforce_compaction ? "true" : "false");
       // We must use L0 or any level higher than `lvl` to be able to overwrite
       // the compaction output keys that we overlap with in this level, We also
       // need to assign this file a seqno to overwrite the compaction output

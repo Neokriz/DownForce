@@ -23,9 +23,11 @@ Status OutputValidator::Add(const Slice& key, const Slice& value) {
   if (!prev_key_.empty() && icmp_.Compare(key, prev_key_) < 0) {
     // DownForce: Allow out-of-order keys when enabled
     if (enable_downforce_compaction_) {
+      // // printf("[DEBUG] output_validator.cc:25 - enable_downforce_compaction=%d, allowing out-of-order keys\n", enable_downforce_compaction_);
       return Status::OK();
     }
     else {
+      // // printf("[DEBUG] output_validator.cc:25 - enable_downforce_compaction=false, returning corruption for out-of-order keys\n");
       return Status::Corruption("Compaction sees out-of-order keys.");
     }
   }

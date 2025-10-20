@@ -907,10 +907,12 @@ bool Compaction::ShouldFormSubcompactions() const {
 
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {
     if(!mutable_cf_options_.enable_downforce_compaction) {      
+      // // printf("[DEBUG] compaction.cc:909 - enable_downforce_compaction=false, using original sub-compaction logic\n");
       // Original logic
       return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
     }
     else{
+      // // printf("[DEBUG] compaction.cc:914 - enable_downforce_compaction=true, using DownForce sub-compaction logic\n");
       // DownForce: Allow sub-compaction for L1+ compactions
       if(start_level_ > 0) return true;
       else return false;
