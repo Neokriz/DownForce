@@ -221,10 +221,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
                                               CompactionInputFiles* inputs,
                                               InternalKey** next_smallest,
                                               bool enable_downforce_compaction) {
-  // Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = enable_downforce_compaction;
-  
-  // printf("[DEBUG] ExpandInputsToCleanCut: level=%d, enable_downforce_compaction=%s, initial inputs size=%zu\n", inputs->level, enable_downforce ? "true" : "false", inputs->size());
+  // printf("[DEBUG] ExpandInputsToCleanCut: level=%d, enable_downforce_compaction=%s, initial inputs size=%zu\n", inputs->level, enable_downforce_compaction ? "true" : "false", inputs->size());
   // This isn't good compaction
   assert(!inputs->empty());
 
@@ -270,7 +267,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   bool files_in_compaction = AreFilesInCompaction(inputs->files);
   // printf("[DEBUG] ExpandInputsToCleanCut: AreFilesInCompaction=%s\n", files_in_compaction ? "true" : "false");
   if (files_in_compaction) {
-    if(!enable_downforce) {
+    if(!enable_downforce_compaction) {
       // printf("[DEBUG] ExpandInputsToCleanCut: enable_downforce_compaction=false, aborting compaction due to files being compacted\n");
       return false;  // Original RocksDB: abort if files are being compacted
     }
@@ -285,9 +282,6 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
 bool CompactionPicker::RangeOverlapWithCompaction(
     const Slice& smallest_user_key, const Slice& largest_user_key,
     int level, bool enable_downforce_compaction) const {
-  // Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = enable_downforce_compaction;
-  
   const Comparator* ucmp = icmp_->user_comparator();
   for (Compaction* c : compactions_in_progress_) {
     if (c->output_level() == level &&
@@ -296,7 +290,7 @@ bool CompactionPicker::RangeOverlapWithCompaction(
       ucmp->CompareWithoutTimestamp(largest_user_key,
                                     c->GetSmallestUserKey()) >= 0) {
       // Overlap detected
-      if (!enable_downforce) {
+      if (!enable_downforce_compaction) {
         // // printf("[DEBUG] compaction_picker.cc:283 - enable_downforce_compaction=false, overlap detected, returning true\n");
         // Original RocksDB: Always return true when overlap is detected
         return true;

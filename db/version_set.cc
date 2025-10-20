@@ -3425,9 +3425,6 @@ bool ShouldChangeFileTemperature(const ImmutableOptions& ioptions,
 void VersionStorageInfo::ComputeCompactionScore(
     const ImmutableOptions& immutable_options,
     const MutableCFOptions& mutable_cf_options) {
-  // DownForce Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = mutable_cf_options.enable_downforce_compaction;
-  
   // printf("[DEBUG] version_set.cc:ComputeCompactionScore - called\n");
   double total_downcompact_bytes = 0.0;
   // Historically, score is defined as actual bytes in a level divided by
@@ -3559,20 +3556,20 @@ void VersionStorageInfo::ComputeCompactionScore(
       // Compute the ratio of current size to size limit.
       uint64_t level_bytes_no_compacting = 0;
       uint64_t level_total_bytes = 0;
-        for (auto f : files_[level]) {
-          level_total_bytes += f->fd.GetFileSize();
-          if (!f->being_compacted) {
-            if (enable_downforce) {
-              // DownForce: Use actual file size for better compaction triggering
-              // // printf("[DEBUG] version_set.cc:3561 - enable_downforce_compaction=true, using actual file size for compaction triggering\n");
-              level_bytes_no_compacting += f->fd.GetFileSize();
-            } else {
-              // Original RocksDB: Use compensated file size
-              // // printf("[DEBUG] version_set.cc:3565 - enable_downforce_compaction=false, using compensated file size\n");
-              level_bytes_no_compacting += f->compensated_file_size;
-            }
+      for (auto f : files_[level]) {
+        level_total_bytes += f->fd.GetFileSize();
+        if (!f->being_compacted) {
+          if (mutable_cf_options.enable_downforce_compaction) {
+            // DownForce: Use actual file size for better compaction triggering
+            // // printf("[DEBUG] version_set.cc:3561 - enable_downforce_compaction=true, using actual file size for compaction triggering\n");
+            level_bytes_no_compacting += f->fd.GetFileSize();
+          } else {
+            // Original RocksDB: Use compensated file size
+            // // printf("[DEBUG] version_set.cc:3565 - enable_downforce_compaction=false, using compensated file size\n");
+            level_bytes_no_compacting += f->compensated_file_size;
           }
         }
+      }
       if (!immutable_options.level_compaction_dynamic_level_bytes) {
         score = static_cast<double>(level_bytes_no_compacting) /
                 MaxBytesForLevel(level);
@@ -4318,9 +4315,6 @@ void VersionStorageInfo::GetOverlappingInputs(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
     bool expand_range, InternalKey** next_smallest, bool enable_downforce_compaction) const {
-  // Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = enable_downforce_compaction;
-  
   if (level >= num_non_empty_levels_) {
     // this level is empty, no overlapping inputs
     return;
@@ -4333,7 +4327,7 @@ void VersionStorageInfo::GetOverlappingInputs(
   const Comparator* user_cmp = user_comparator_;
   if (level > 0) {
     GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs, hint_index,
-                                          file_index, false, next_smallest, enable_downforce);
+                                          file_index, false, next_smallest, enable_downforce_compaction);
     return;
   }
 
@@ -4436,9 +4430,6 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
     bool within_interval, InternalKey** next_smallest, bool enable_downforce_compaction) const {
-  // DownForce Performance optimization: Cache the flag to avoid repeated memory access
-  const bool enable_downforce = enable_downforce_compaction;
-  
   assert(level > 0);
 
   auto user_cmp = user_comparator_;
@@ -4520,7 +4511,7 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     *file_index = start_index;
   }
 
-  if (enable_downforce) {
+  if (enable_downforce_compaction) {
     // // printf("[DEBUG] version_set.cc:4511 - enable_downforce_compaction=true, using DownForce compaction logic for overlapping inputs\n");
     // DownForce: if input level is 1, search all files and put files that need compaction into inputs. (in two steps)
     // DownForce: Check if level 1 has files marked for compaction due to overlaps
