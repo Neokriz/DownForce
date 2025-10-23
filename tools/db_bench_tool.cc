@@ -314,6 +314,9 @@ DEFINE_int64(deletes, -1,
 
 DEFINE_int32(bloom_locality, 0, "Control bloom filter probes locality");
 
+DEFINE_int32(downforce_max_parallel_compactions, 4, 
+             "Maximum number of parallel L0 compactions allowed in DownForce mode");
+
 DEFINE_int64(seed, 0,
              "Seed base for random number generators. "
              "When 0 it is derived from the current time.");
@@ -4362,6 +4365,7 @@ class Benchmark {
               FLAGS_memtable_insert_with_hint_prefix_size));
     }
     options.bloom_locality = FLAGS_bloom_locality;
+    options.downforce_max_parallel_compactions = FLAGS_downforce_max_parallel_compactions;
     options.max_file_opening_threads = FLAGS_file_opening_threads;
     options.compaction_readahead_size = FLAGS_compaction_readahead_size;
     options.log_readahead_size = FLAGS_log_readahead_size;

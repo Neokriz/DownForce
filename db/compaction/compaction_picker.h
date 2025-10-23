@@ -140,7 +140,7 @@ class CompactionPicker {
   // that is currently running.
   bool RangeOverlapWithCompaction(const Slice& smallest_user_key,
                                   const Slice& largest_user_key,
-                                  int level) const;
+                                  int level, const MutableCFOptions& mutable_cf_options) const;
 
   // Stores the minimal range that covers all entries in inputs in
   // *smallest, *largest.
@@ -188,7 +188,7 @@ class CompactionPicker {
   // key range of a currently running compaction.
   bool FilesRangeOverlapWithCompaction(
       const std::vector<CompactionInputFiles>& inputs, int level,
-      int penultimate_level) const;
+      int penultimate_level, const MutableCFOptions& mutable_cf_options) const;
 
   bool SetupOtherInputs(const std::string& cf_name,
                         const MutableCFOptions& mutable_cf_options,

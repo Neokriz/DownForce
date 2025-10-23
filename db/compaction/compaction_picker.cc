@@ -260,17 +260,35 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
 
 bool CompactionPicker::RangeOverlapWithCompaction(
     const Slice& smallest_user_key, const Slice& largest_user_key,
-    int level) const {
+    int level, const MutableCFOptions& mutable_cf_options) const {
   const Comparator* ucmp = icmp_->user_comparator();
+  
+  // Count current L0 compactions in progress
+  int l0_compactions_count = 0;
+  for (Compaction* c : compactions_in_progress_) {
+    if (c->start_level() == 0) {
+      l0_compactions_count++;
+    }
+  }
+  
   for (Compaction* c : compactions_in_progress_) {
     if (c->output_level() == level &&
         ucmp->CompareWithoutTimestamp(smallest_user_key,
                                       c->GetLargestUserKey()) <= 0 &&
         ucmp->CompareWithoutTimestamp(largest_user_key,
                                       c->GetSmallestUserKey()) >= 0) {
-      // Overlap
-      if(level != 1) return false;
-      else return true;// return true;
+      // Overlap detected
+      if (level == 0) {
+        // For L0, check if we can allow more parallel compactions
+        if (l0_compactions_count < mutable_cf_options.downforce_max_parallel_compactions) {
+          return false; // Allow parallel L0 compaction
+        } else {
+          return true; // Limit reached, block this compaction
+        }
+      } else {
+        // For other levels, always return true when overlap is detected
+        return true;
+      }
     }
     if (c->SupportsPerKeyPlacement()) {
       if (c->OverlapPenultimateLevelOutputRange(smallest_user_key,
@@ -285,7 +303,7 @@ bool CompactionPicker::RangeOverlapWithCompaction(
 
 bool CompactionPicker::FilesRangeOverlapWithCompaction(
     const std::vector<CompactionInputFiles>& inputs, int level,
-    int penultimate_level) const {
+    int penultimate_level, const MutableCFOptions& mutable_cf_options) const {
   bool is_empty = true;
   for (auto& in : inputs) {
     if (!in.empty()) {
@@ -305,7 +323,7 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
   if (penultimate_level != Compaction::kInvalidLevel) {
     if (ioptions_.compaction_style == kCompactionStyleUniversal) {
       if (RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                     penultimate_level)) {
+                                     penultimate_level, mutable_cf_options)) {
         return true;
       }
     } else {
@@ -313,14 +331,14 @@ bool CompactionPicker::FilesRangeOverlapWithCompaction(
       GetRange(inputs, &penultimate_smallest, &penultimate_largest, level);
       if (RangeOverlapWithCompaction(penultimate_smallest.user_key(),
                                      penultimate_largest.user_key(),
-                                     penultimate_level)) {
+                                     penultimate_level, mutable_cf_options)) {
         return true;
       }
     }
   }
 
   return RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
-                                    level);
+                                    level, mutable_cf_options);
 }
 
 // Returns true if any one of specified files are being compacted
@@ -356,7 +374,7 @@ Compaction* CompactionPicker::CompactFiles(
                                   input_files, output_level,
                                   Compaction::EvaluatePenultimateLevel(
                                       vstorage, mutable_cf_options, ioptions_,
-                                      start_level, output_level)));
+                                      start_level, output_level), mutable_cf_options));
 #endif /* !NDEBUG */
 
   CompressionType compression_type;
@@ -664,7 +682,7 @@ Compaction* CompactionPicker::CompactRange(
             inputs, output_level,
             Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                  ioptions_, start_level,
-                                                 output_level))) {
+                                                 output_level), mutable_cf_options)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       *manual_conflict = true;
@@ -852,7 +870,7 @@ Compaction* CompactionPicker::CompactRange(
           compaction_inputs, output_level,
           Compaction::EvaluatePenultimateLevel(vstorage, mutable_cf_options,
                                                ioptions_, input_level,
-                                               output_level))) {
+                                               output_level), mutable_cf_options)) {
     // This compaction output could potentially conflict with the output
     // of a currently running compaction, we cannot run it.
     *manual_conflict = true;
@@ -1141,7 +1159,8 @@ Status CompactionPicker::SanitizeAndConvertCompactionInputFiles(
           *converted_input_files, output_level,
           Compaction::EvaluatePenultimateLevel(
               version->storage_info(), version->GetMutableCFOptions(),
-              ioptions_, (*converted_input_files)[0].level, output_level))) {
+              ioptions_, (*converted_input_files)[0].level, output_level), 
+          version->GetMutableCFOptions())) {
     return Status::Aborted(
         "A running compaction is writing to the same output level(s) in an "
         "overlapping key range");
@@ -1156,7 +1175,8 @@ void CompactionPicker::RegisterCompaction(Compaction* c) {
   assert(ioptions_.compaction_style != kCompactionStyleLevel ||
          c->output_level() == 0 ||
          !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level(),
-                                          c->GetPenultimateLevel()));
+                                          c->GetPenultimateLevel(), 
+                                          c->mutable_cf_options()));
   // CompactionReason::kExternalSstIngestion's start level is just a placeholder
   // number without actual meaning as file ingestion technically does not have
   // an input level like other compactions

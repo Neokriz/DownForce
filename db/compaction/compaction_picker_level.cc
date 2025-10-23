@@ -419,7 +419,7 @@ void LevelCompactionBuilder::SetupOtherFilesWithRoundRobinExpansion() {
             {tmp_start_level_inputs}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_), mutable_cf_options_)) {
       // Constraint 1a
       tmp_start_level_inputs.clear();
       return;
@@ -495,7 +495,7 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
             compaction_inputs_, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_), mutable_cf_options_)) {
       // This compaction output could potentially conflict with the output
       // of a currently running compaction, we cannot run it.
       return false;
@@ -865,7 +865,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
             {start_level_inputs_}, output_level_,
             Compaction::EvaluatePenultimateLevel(vstorage_, mutable_cf_options_,
                                                  ioptions_, start_level_,
-                                                 output_level_))) {
+                                                 output_level_), mutable_cf_options_)) {
       // A locked (pending compaction) input-level file was pulled in due to
       // user-key overlap.
 

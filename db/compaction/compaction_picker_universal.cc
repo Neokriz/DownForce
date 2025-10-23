@@ -998,7 +998,7 @@ Compaction* UniversalCompactionBuilder::PickCompactionToReduceSortedRuns(
                                inputs, output_level,
                                Compaction::EvaluatePenultimateLevel(
                                    vstorage_, mutable_cf_options_, ioptions_,
-                                   start_level, output_level))) {
+                                   start_level, output_level), mutable_cf_options_)) {
     return nullptr;
   }
   CompactionReason compaction_reason;
@@ -1347,7 +1347,7 @@ Compaction* UniversalCompactionBuilder::PickIncrementalForReduceSizeAmp(
                                inputs, output_level,
                                Compaction::EvaluatePenultimateLevel(
                                    vstorage_, mutable_cf_options_, ioptions_,
-                                   start_level, output_level))) {
+                                   start_level, output_level), mutable_cf_options_)) {
     return nullptr;
   }
 
@@ -1488,7 +1488,7 @@ Compaction* UniversalCompactionBuilder::PickDeleteTriggeredCompaction() {
               inputs, output_level,
               Compaction::EvaluatePenultimateLevel(
                   vstorage_, mutable_cf_options_, ioptions_, start_level,
-                  output_level))) {
+                  output_level), mutable_cf_options_)) {
         return nullptr;
       }
 
@@ -1592,7 +1592,7 @@ Compaction* UniversalCompactionBuilder::PickCompactionWithSortedRunRange(
                                inputs, output_level,
                                Compaction::EvaluatePenultimateLevel(
                                    vstorage_, mutable_cf_options_, ioptions_,
-                                   start_level, output_level))) {
+                                   start_level, output_level), mutable_cf_options_)) {
     return nullptr;
   }
 

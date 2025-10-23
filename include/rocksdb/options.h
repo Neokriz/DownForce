@@ -305,6 +305,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   bool in_memory_merge = true;
   bool disable_intra_l0_compaction = false;
   bool l0_size_based_stop = false;
+  int downforce_max_parallel_compactions = 4;
 
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
