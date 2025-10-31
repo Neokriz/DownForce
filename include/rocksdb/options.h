@@ -306,6 +306,10 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   bool disable_intra_l0_compaction = false;
   bool l0_size_based_stop = false;
 
+  // DownForce: max number of concurrent L0 compactions allowed.
+  // -1 means unlimited (no cap). This value is consumed via MutableCFOptions.
+  int downforce_max_parallel_compactions = -1;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default

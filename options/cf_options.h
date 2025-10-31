@@ -176,7 +176,8 @@ struct MutableCFOptions {
         uncache_aggressiveness(options.uncache_aggressiveness),
         in_memory_merge(options.in_memory_merge),
         disable_intra_l0_compaction(options.disable_intra_l0_compaction),
-        l0_size_based_stop(options.l0_size_based_stop)
+        l0_size_based_stop(options.l0_size_based_stop),
+        downforce_max_parallel_compactions(options.downforce_max_parallel_compactions)
         {
     RefreshDerivedOptions(options.num_levels, options.compaction_style);
   }
@@ -235,7 +236,8 @@ struct MutableCFOptions {
         uncache_aggressiveness(0),
         in_memory_merge(true),
         disable_intra_l0_compaction(false),
-        l0_size_based_stop(false) {}
+        l0_size_based_stop(false),
+        downforce_max_parallel_compactions(-1) {}
 
   explicit MutableCFOptions(const Options& options);
 
@@ -343,6 +345,7 @@ struct MutableCFOptions {
   bool in_memory_merge;
   bool disable_intra_l0_compaction;
   bool l0_size_based_stop;
+  int downforce_max_parallel_compactions;
 
   // Derived options
   // Per-level target file size.

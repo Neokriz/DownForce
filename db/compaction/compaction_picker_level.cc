@@ -806,15 +806,14 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   // could be made better by looking at key-ranges that are
   // being compacted at level 0.
 
-  // This is for disable intra-L0 compaction and preventing return false.
-  // if (start_level_ == 0 &&
-  //    !compaction_picker_->level0_compactions_in_progress()->empty()) {
-  //   if (PickSizeBasedIntraL0Compaction()) {
-  //     return true;
-  //   }
-  //   TEST_SYNC_POINT("LevelCompactionPicker::PickCompactionBySize:0");
-  //   return false;
-  // }
+  // DownForce: cap concurrent L0 compactions by mutable option when specified
+  if (start_level_ == 0) {
+    int limit = mutable_cf_options_.downforce_max_parallel_compactions;
+    if (limit >= 0 &&
+        static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) >= limit) {
+      return false;
+    }
+  }
 
   start_level_inputs_.clear();
   start_level_inputs_.level = start_level_;
