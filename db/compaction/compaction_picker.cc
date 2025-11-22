@@ -1261,10 +1261,10 @@ bool CompactionPicker::GetOverlappingL0Files(
   vstorage->GetOverlappingInputs(0, &smallest, &largest,
                                  &(start_level_inputs->files));
 
-  // L0 전용: 입력 파일 중 진행중인 컴팩션이 있으면 선택 중단하여 충돌을 방지한다.
-  if (AreFilesInCompaction(start_level_inputs->files)) {
-    return false;
-  }
+  // // L0 전용: 입력 파일 중 진행중인 컴팩션이 있으면 선택 중단하여 충돌을 방지한다.
+  // if (AreFilesInCompaction(start_level_inputs->files)) {
+  //   return false;
+  // }
 
   // If we include more L0 files in the same compaction run it can
   // cause the 'smallest' and 'largest' key to get extended to a

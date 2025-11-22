@@ -947,14 +947,33 @@ class VersionBuilder::Rep {
 
     if (current_level !=
         VersionStorageInfo::FileLocation::Invalid().GetLevel()) {
-      if (level >= num_levels_) {
-        has_invalid_levels_ = true;
+      // 파일이 이미 다른 레벨에 있는 경우
+      // 삭제 예정 목록에 있는지 확인 (다른 레벨에서 삭제 예정인 경우)
+      bool is_pending_deletion = false;
+      if (current_level < num_levels_) {
+        auto& current_level_state = levels_[current_level];
+        auto& del_files = current_level_state.deleted_files;
+        auto del_it = del_files.find(file_number);
+        if (del_it != del_files.end()) {
+          // 삭제 예정 파일이면 삭제를 먼저 처리
+          del_files.erase(del_it);
+          table_file_levels_[file_number] =
+              VersionStorageInfo::FileLocation::Invalid().GetLevel();
+          is_pending_deletion = true;
+        }
       }
+      
+      if (!is_pending_deletion) {
+        // 삭제 예정이 아닌데 다른 레벨에 있으면 오류
+        if (level >= num_levels_) {
+          has_invalid_levels_ = true;
+        }
 
-      std::ostringstream oss;
-      oss << "Cannot add table file #" << file_number << " to level " << level
-          << " since it is already in the LSM tree on level " << current_level;
-      return Status::Corruption("VersionBuilder", oss.str());
+        std::ostringstream oss;
+        oss << "Cannot add table file #" << file_number << " to level " << level
+            << " since it is already in the LSM tree on level " << current_level;
+        return Status::Corruption("VersionBuilder", oss.str());
+      }
     }
 
     if (level >= num_levels_) {

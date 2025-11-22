@@ -4502,12 +4502,41 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
     *file_index = start_index;
   }
 
-  // if input leve is 1, search all files and put files that need compaction into inputs.
+  // if input level is 1, search files within range that need compaction into inputs.
   if(level == 1){
-    for(int i = 0; i < (int)files_[level].size(); i++){
-     if(files_[level][i]->need_compaction && !files_[level][i]->being_compacted)
-       inputs->push_back(files_[level][i]);
-   }
+    // Range-based filtering: only select need_compaction files within the overlap range
+    // This ensures key ranges are properly maintained
+    int filtered_start = std::max(0, start_index - 2);  // Small margin for safety
+    int filtered_end = std::min((int)files_[level].size(), end_index + 2);
+    
+    bool found_need_compaction = false;
+    for(int i = filtered_start; i < filtered_end; i++){
+      // Check if file is within the key range
+      bool in_range = true;
+      if (begin != nullptr) {
+        in_range = in_range && 
+          user_cmp->Compare(files_[level][i]->largest.user_key(), begin->user_key()) >= 0;
+      }
+      if (end != nullptr) {
+        in_range = in_range && 
+          user_cmp->Compare(files_[level][i]->smallest.user_key(), end->user_key()) <= 0;
+      }
+      
+      if(in_range && 
+         files_[level][i]->need_compaction && 
+         !files_[level][i]->being_compacted) {
+        inputs->push_back(files_[level][i]);
+        found_need_compaction = true;
+      }
+    }
+    
+    // If no need_compaction files in range, fall back to normal overlapping files
+    if (!found_need_compaction) {
+      for (int i = start_index; i < end_index; i++) {
+        if(!files_[level][i]->being_compacted)
+          inputs->push_back(files_[level][i]);
+      }
+    }
   }
   else{
     // insert overlapping files into vector
@@ -7057,16 +7086,22 @@ InternalIterator* VersionSet::MakeInputIterator(
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
 
-  //const size_t space = (c->level() == 0 ? c->input_levels(0)->num_files +
-  //                                            c->num_input_levels() - 1
-  //                                      : c->num_input_levels());
+  // Calculate space: L0 uses file-level iterators, L1+ uses LevelIterator
+  // LevelIterator uses ReadOptions bounds (set in CompactionJob) for range filtering
+  size_t l0_files = 0;
+  size_t num_levels = 0;
   
-  // Caclulate total files for all levels.
-  size_t total_files = 0;
   for (size_t which = 0; which < c->num_input_levels(); which++) {
-    total_files += c->input_levels(which)->num_files;
+    const LevelFilesBrief* flevel = c->input_levels(which);
+    if (flevel->num_files > 0) {
+      if (c->level(which) == 0) {
+        l0_files += flevel->num_files;
+      } else {
+        num_levels++;
+      }
+    }
   }
-  const size_t space = total_files;
+  const size_t space = l0_files + num_levels;
   
   InternalIterator** list = new InternalIterator*[space];
   // First item in the pair is a pointer to range tombstones.
@@ -7120,41 +7155,27 @@ InternalIterator* VersionSet::MakeInputIterator(
                                         nullptr);
         }
       } else {
-        for (size_t i = 0; i < flevel->num_files; i++) {
-          const FileMetaData& fmd = *flevel->files[i].file_metadata;
-          if (start.has_value() &&
-            cfd->user_comparator()->CompareWithoutTimestamp(
-              *start, fmd.largest.user_key()) > 0) {
-            continue;
-          }
-          // We should be able to filter out the case where the end key
-          // equals to the end boundary, since the end key is exclusive.
-          // We try to be extra safe here.
-          if (end.has_value() &&
-              cfd->user_comparator()->CompareWithoutTimestamp(
-                  *end, fmd.smallest.user_key()) < 0) {
-            continue;
-          }
-          std::unique_ptr<TruncatedRangeDelIterator> range_tombstone_iter = 
-              nullptr;
-          list[num++] = cfd->table_cache()->NewIterator(
-               read_options, file_options_compactions,
-               cfd->internal_comparator(), fmd, range_del_agg,
-               *c->mutable_cf_options(),
-               /*table_reader_ptr=*/nullptr,
-               /*file_read_hist=*/nullptr, TableReaderCaller::kCompaction,
-               /*arena=*/nullptr,
-               /*skip_filters=*/false,
-               /*level=*/static_cast<int>(c->level(which)),
-               MaxFileSizeForL0MetaPin(*c->mutable_cf_options()),
-               /*smallest_compaction_key=*/nullptr,
-               /*largest_compaction_key=*/nullptr,
-               /*allow_unprepared_value=*/false,
-               /*range_del_read_seqno=*/nullptr,
-               /*range_del_iter=*/&range_tombstone_iter);
-            range_tombstones.emplace_back(std::move(range_tombstone_iter),
-                                          nullptr);
-        }
+        // L1+: Use LevelIterator with ReadOptions bounds for performance
+        // ReadOptions.iterate_lower_bound and iterate_upper_bound are set
+        // in CompactionJob, so LevelIterator will properly filter by range
+        // This gives us both correctness (via bounds) and performance (via LevelIterator)
+        std::unique_ptr<TruncatedRangeDelIterator>** tombstone_iter_ptr = nullptr;
+        auto* mem = new char[sizeof(LevelIterator)];
+        auto level_iter = new (mem) LevelIterator(
+            cfd->table_cache(), read_options, file_options_compactions,
+            cfd->internal_comparator(), flevel,
+            *c->mutable_cf_options(),
+            false /* should_sample */,
+            nullptr /* file_read_hist */,
+            TableReaderCaller::kCompaction,
+            false /* skip_filters */,
+            static_cast<int>(c->level(which)),
+            range_del_agg,
+            nullptr /* compaction_boundaries */,
+            false /* allow_unprepared_value */,
+            &tombstone_iter_ptr);
+        list[num++] = level_iter;
+        range_tombstones.emplace_back(nullptr, tombstone_iter_ptr);
       }
     }
   }
