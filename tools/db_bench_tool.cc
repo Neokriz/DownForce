@@ -439,6 +439,10 @@ DEFINE_double(read_random_exp_range, 0.0,
 
 DEFINE_bool(histogram, false, "Print histogram of operation timings");
 
+DEFINE_bool(report_interval_histogram, false,
+            "Print aggregated interval histogram (read/write latency) every "
+            "second. Requires --histogram=true");
+
 DEFINE_bool(confidence_interval_only, false,
             "Print 95% confidence interval upper and lower bounds only for "
             "aggregate stats.");
@@ -2506,7 +2510,8 @@ class Stats {
           }
 
           // Aggregate local interval histogram to global one
-          if (FLAGS_histogram && !interval_hist_.empty()) {
+          if (FLAGS_histogram && FLAGS_report_interval_histogram &&
+              !interval_hist_.empty()) {
             std::lock_guard<std::mutex> lock(global_interval_stats.mu);
             if (global_interval_stats.last_global_report_micros == 0) {
               global_interval_stats.last_global_report_micros = start_;
