@@ -145,7 +145,8 @@ CompactionJob::CompactionJob(
     const std::string& db_id, const std::string& db_session_id,
     std::string full_history_ts_low, std::string trim_ts,
     BlobFileCompletionCallback* blob_callback, int* bg_compaction_scheduled,
-    int* bg_bottom_compaction_scheduled)
+    int* bg_bottom_compaction_scheduled, 
+    int* num_running_l0_compactions, int* num_running_l1_compactions)
     : compact_(new CompactionState(compaction)),
       compaction_stats_(compaction->compaction_reason(), 1),
       db_options_(db_options),
@@ -190,7 +191,9 @@ CompactionJob::CompactionJob(
       blob_callback_(blob_callback),
       extra_num_subcompaction_threads_reserved_(0),
       bg_compaction_scheduled_(bg_compaction_scheduled),
-      bg_bottom_compaction_scheduled_(bg_bottom_compaction_scheduled) {
+      bg_bottom_compaction_scheduled_(bg_bottom_compaction_scheduled),
+      num_running_l0_compactions_(num_running_l0_compactions),
+      num_running_l1_compactions_(num_running_l1_compactions) {
   assert(compaction_job_stats_ != nullptr);
   assert(log_buffer_ != nullptr);
 
@@ -1804,6 +1807,16 @@ Status CompactionJob::InstallCompactionResults(
     *compaction_released = true;
   };
 
+  if (compaction->start_level() == 0 && num_running_l0_compactions_ != nullptr) {
+    (*num_running_l0_compactions_)--;
+    //printf("[DEBUG] num_running_l0_compactions end: %d\n", *num_running_l0_compactions_);
+  }
+
+  if (compaction->start_level() == 1 && num_running_l1_compactions_ != nullptr) {
+    (*num_running_l1_compactions_)--;
+    //printf("[DEBUG] num_running_l1_compactions end: %d\n", *num_running_l1_compactions_);
+  }
+
   return versions_->LogAndApply(
       compaction->column_family_data(), mutable_cf_options, read_options,
       write_options, edit, db_mutex_, db_directory_,
@@ -2133,6 +2146,15 @@ void CompactionJob::LogCompaction() {
     compaction->Summary(scratch, sizeof(scratch));
     ROCKS_LOG_INFO(db_options_.info_log, "[%s]: Compaction start summary: %s\n",
                    cfd->GetName().c_str(), scratch);
+
+    if (compaction->start_level() == 0 && num_running_l0_compactions_ != nullptr) {
+      (*num_running_l0_compactions_)++;
+      //printf("[DEBUG] num_running_l0_compactions: %d\n", *num_running_l0_compactions_);
+    }
+    if (compaction->start_level() == 1 && num_running_l1_compactions_ != nullptr) {
+      (*num_running_l1_compactions_)++;
+      //printf("[DEBUG] num_running_l1_compactions: %d\n", *num_running_l1_compactions_);
+    }
     // build event logger report
     auto stream = event_logger_->Log();
     stream << "job" << job_id_ << "event"

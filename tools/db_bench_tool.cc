@@ -1557,6 +1557,18 @@ DEFINE_uint64(
     "If non-zero, db_bench will rate-limit the writes going into RocksDB. This "
     "is the global rate in bytes/second.");
 
+DEFINE_uint64(
+    write_rate_sleep_us, 0,
+    "If non-zero, sleep for this many microseconds after each write operation "
+    "to slow down the write rate. This is a fixed delay per write, not "
+    "progressive.");
+
+DEFINE_uint64(
+    write_rate_sleep_interval, 1,
+    "Sleep every N writes when write_rate_sleep_us is set. For example, "
+    "if set to 10, sleep will occur every 10 writes. Set to 1 to sleep "
+    "after every write (default).");
+
 // the parameters of mix_graph
 DEFINE_double(keyrange_dist_a, 0.0,
               "The parameter 'a' of prefix average access distribution "
@@ -2222,6 +2234,17 @@ static std::unordered_map<OperationType, std::string, std::hash<unsigned char>>
                            {kCrc, "crc"},           {kHash, "hash"},
                            {kOthers, "op"}};
 
+namespace {
+struct GlobalIntervalStats {
+  std::mutex mu;
+  std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
+                      std::hash<unsigned char>>
+      hist;
+  uint64_t last_global_report_micros = 0;
+};
+static GlobalIntervalStats global_interval_stats;
+}  // namespace
+                            
 class CombinedStats;
 class Stats {
  private:
@@ -2240,6 +2263,9 @@ class Stats {
   std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
                      std::hash<unsigned char>>
       hist_;
+  std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
+                      std::hash<unsigned char>>
+      interval_hist_;
   std::string message_;
   bool exclude_from_merge_;
   ReporterAgent* reporter_agent_;  // does not own
@@ -2257,6 +2283,7 @@ class Stats {
     next_report_ = FLAGS_stats_interval ? FLAGS_stats_interval : 100;
     last_op_finish_ = start_;
     hist_.clear();
+    interval_hist_.clear();
     done_ = 0;
     last_report_done_ = 0;
     bytes_ = 0;
@@ -2366,6 +2393,13 @@ class Stats {
       }
       hist_[op_type]->Add(micros);
 
+      // Add to interval histogram as well
+      if (interval_hist_.find(op_type) == interval_hist_.end()) {
+        auto hist_temp = std::make_shared<HistogramImpl>();
+        interval_hist_.insert({op_type, std::move(hist_temp)});
+      }
+      interval_hist_[op_type]->Add(micros);
+
       if (micros >= FLAGS_slow_usecs && !FLAGS_stats_interval) {
         fprintf(stderr, "long op: %" PRIu64 " micros%30s\r", micros, "");
         fflush(stderr);
@@ -2468,6 +2502,63 @@ class Stats {
                   }
                 }
               }
+            }
+          }
+
+          // Aggregate local interval histogram to global one
+          if (FLAGS_histogram && !interval_hist_.empty()) {
+            std::lock_guard<std::mutex> lock(global_interval_stats.mu);
+            if (global_interval_stats.last_global_report_micros == 0) {
+              global_interval_stats.last_global_report_micros = start_;
+            }
+            for (auto it = interval_hist_.begin(); it != interval_hist_.end();
+                 ++it) {
+              if (global_interval_stats.hist.find(it->first) ==
+                  global_interval_stats.hist.end()) {
+                global_interval_stats.hist[it->first] =
+                    std::make_shared<HistogramImpl>();
+              }
+              global_interval_stats.hist[it->first]->Merge(*it->second);
+            }
+            interval_hist_.clear();
+
+            // Check if global time window exceeds 1 second
+            uint64_t global_window_micros =
+                now - global_interval_stats.last_global_report_micros;
+            if (global_window_micros >= 1000000) {  // 1 second
+              fprintf(stdout,
+                      "\n=== Aggregated Interval Histogram (Time Window: %.6f "
+                      "seconds) ===\n",
+                      global_window_micros / 1000000.0);
+              if (db) {
+                std::string num_compactions_str, num_l0_compactions_str,
+                    num_l1_compactions_str;
+                db->GetProperty("rocksdb.num-running-compactions",
+                                &num_compactions_str);
+                db->GetProperty("rocksdb.num-running-l0-compactions",
+                                &num_l0_compactions_str);
+                db->GetProperty("rocksdb.num-running-l1-compactions",
+                                &num_l1_compactions_str);
+                fprintf(
+                    stdout,
+                    "Running Total Compactions: %s, Running L0 Compactions: %s, "
+                    "Running L1 Compactions: %s, Running Ld Compactions: %d\n",
+                    num_compactions_str.c_str(), num_l0_compactions_str.c_str(),
+                    num_l1_compactions_str.c_str(),
+                    std::stoi(num_compactions_str) -
+                        std::stoi(num_l0_compactions_str) -
+                        std::stoi(num_l1_compactions_str));
+              }
+              for (auto it = global_interval_stats.hist.begin();
+                   it != global_interval_stats.hist.end(); ++it) {
+                fprintf(stdout, "Microseconds per %s:\n%s\n",
+                        OperationTypeString[it->first].c_str(),
+                        it->second->ToString().c_str());
+              }
+              // fprintf(stdout, "=== End of Aggregated Interval Histogram ===\n\n");
+              fflush(stdout);
+              global_interval_stats.hist.clear();
+              global_interval_stats.last_global_report_micros = now;
             }
           }
 
@@ -5662,6 +5753,13 @@ class Benchmark {
         bytes += val.size() + key_size_ + user_timestamp_size_;
         ++num_written;
 
+        // 고정된 sleep 시간으로 write rate 조절
+        // 설정된 간격마다 sleep 수행
+        if (FLAGS_write_rate_sleep_us > 0 &&
+            num_written % FLAGS_write_rate_sleep_interval == 0) {
+          FLAGS_env->SleepForMicroseconds(FLAGS_write_rate_sleep_us);
+        }
+
         // If all disposable entries have been inserted, then we need to
         // add in the job queue a call for 'persistent entry insertions +
         // disposable entry deletions'.
@@ -7231,7 +7329,8 @@ class Benchmark {
     if (thread->tid > 0) {
       ReadRandom(thread);
     } else {
-      BGWriter(thread, kWrite);
+      //BGWriter(thread, kWrite);
+      DoWrite(thread, RANDOM);
     }
   }
 
@@ -7626,6 +7725,84 @@ class Benchmark {
   // This is different from ReadWhileWriting because it does not use
   // an extra thread.
   void ReadRandomWriteRandom(ThreadState* thread) {
+    ReadOptions options = read_options_;
+    RandomGenerator gen;
+    std::string value;
+    int64_t found = 0;
+    int64_t reads_done = 0;
+    int64_t writes_done = 0;
+    Duration duration(FLAGS_duration, readwrites_);
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+
+    std::unique_ptr<char[]> ts_guard;
+    if (user_timestamp_size_ > 0) {
+      ts_guard.reset(new char[user_timestamp_size_]);
+    }
+
+    const int64_t ops_per_batch = 1000000 / 10;
+    const int64_t read_ops_per_batch = FLAGS_readwritepercent * 10000 / 100;
+    const int64_t write_ops_per_batch = ops_per_batch - read_ops_per_batch;
+    // Each thread starts at a different point in the cycle to stagger reads.
+    const int64_t offset =
+        (FLAGS_threads > 0) ? (write_ops_per_batch * thread->tid / FLAGS_threads)
+                            : 0;
+    int64_t ops_done_in_batch = 0;
+
+    // the number of iterations is the larger of read_ or write_
+    while (!duration.Done(1)) {
+      DB* db = SelectDB(thread);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+
+      int64_t current_op = (ops_done_in_batch + offset) % ops_per_batch;
+
+      if (current_op < read_ops_per_batch) {
+        // Read
+        Slice ts;
+        if (user_timestamp_size_ > 0) {
+          ts = mock_app_clock_->GetTimestampForRead(thread->rand,
+                                                    ts_guard.get());
+          options.timestamp = &ts;
+        }
+        Status s = db->Get(options, key, &value);
+        if (!s.ok() && !s.IsNotFound()) {
+          fprintf(stderr, "get error: %s\n", s.ToString().c_str());
+          // we continue after error rather than exiting so that we can
+          // find more errors if any
+        } else if (!s.IsNotFound()) {
+          found++;
+        }
+        reads_done++;
+        thread->stats.FinishedOps(nullptr, db, 1, kRead);
+      } else {
+        // Write
+        Status s;
+        if (user_timestamp_size_ > 0) {
+          Slice ts = mock_app_clock_->Allocate(ts_guard.get());
+          s = db->Put(write_options_, key, ts, gen.Generate());
+        } else {
+          s = db->Put(write_options_, key, gen.Generate());
+        }
+        if (!s.ok()) {
+          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+          ErrorExit();
+        }
+        writes_done++;
+        thread->stats.FinishedOps(nullptr, db, 1, kWrite);
+      }
+      ops_done_in_batch = (ops_done_in_batch + 1) % ops_per_batch;
+    }
+    char msg[100];
+    snprintf(msg, sizeof(msg),
+             "( reads:%" PRIu64 " writes:%" PRIu64 " total:%" PRIu64
+             " found:%" PRIu64 ")",
+             reads_done, writes_done, readwrites_, found);
+    thread->stats.AddMessage(msg);
+  }
+
+
+  [[maybe_unused]] void ReadRandomWriteRandomUnique(ThreadState* thread) {
     ReadOptions options = read_options_;
     RandomGenerator gen;
     std::string value;
@@ -8995,7 +9172,7 @@ int db_bench_tool(int argc, char** argv) {
   if (FLAGS_stats_interval_seconds > 0) {
     // When both are set then FLAGS_stats_interval determines the frequency
     // at which the timer is checked for FLAGS_stats_interval_seconds
-    FLAGS_stats_interval = 1000;
+    FLAGS_stats_interval = 1;
   }
 
   if (FLAGS_seek_missing_prefix && FLAGS_prefix_size <= 8) {

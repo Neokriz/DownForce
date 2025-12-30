@@ -209,7 +209,8 @@ class CompactionPicker {
       CompactionInputFiles* start_level_inputs,
       std::function<bool(const FileMetaData*)> skip_marked_file);
 
-  bool GetOverlappingL0Files(VersionStorageInfo* vstorage,
+  bool GetOverlappingL0Files(const MutableCFOptions& mutable_cf_options,
+                             VersionStorageInfo* vstorage,
                              CompactionInputFiles* start_level_inputs,
                              int output_level, int* parent_index);
 

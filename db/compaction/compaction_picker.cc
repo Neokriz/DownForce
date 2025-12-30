@@ -253,6 +253,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   // If, after the expansion, there are files that are already under
   // compaction, then we must drop/cancel this compaction.
   if (AreFilesInCompaction(inputs->files)) {
+    printf("[DEBUG] CompactionPicker::ExpandInputsToCleanCut: AreFilesInCompaction = true\n");
     // return false;
   }
   return true;
@@ -269,8 +270,16 @@ bool CompactionPicker::RangeOverlapWithCompaction(
         ucmp->CompareWithoutTimestamp(largest_user_key,
                                       c->GetSmallestUserKey()) >= 0) {
       // Overlap
-      if(level != 1) return false;
-      else return true;// return true;
+      // printf("[DEBUG] CompactionPicker::RangeOverlapWithCompaction: Overlap = true\n");
+      int limit = c->mutable_cf_options()->downforce_max_parallel_compactions;
+      if(static_cast<int>(level0_compactions_in_progress_.size()) < limit){
+        if(level != 1) return false;
+        else return true;
+      }
+      else{
+        return true; //default
+      }
+      
     }
     if (c->SupportsPerKeyPlacement()) {
       if (c->OverlapPenultimateLevelOutputRange(smallest_user_key,
@@ -484,6 +493,8 @@ bool CompactionPicker::SetupOtherInputs(
   // Get the range one last time.
   GetRange(*inputs, &smallest, &largest);
 
+  int limit_df = mutable_cf_options.downforce_max_parallel_compactions;
+
   // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
   // include in compaction
   vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
@@ -493,10 +504,14 @@ bool CompactionPicker::SetupOtherInputs(
     return false;
   }
   if (!output_level_inputs->empty()) {
+    // printf("[DEBUG] CompactionPicker::SetupOtherInputs: ExpandInputsToCleanCut = false\n");
     if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
-      // return false;
-
-      if(input_level == 0) return true;
+      if(static_cast<int>(level0_compactions_in_progress_.size()) < limit_df){
+        if(input_level == 0) return true;
+      }
+      else{
+        return false; //default
+      }
     }
   }
 
@@ -639,10 +654,13 @@ Compaction* CompactionPicker::CompactRange(
     }
 
     // DownForce: cap concurrent L0 compactions by mutable option when specified
+    // marking
     if ((start_level == 0)) {
+      printf("[DEBUG] CompactionPicker::CompactRange: start_level == 0\n");
       int limit = mutable_cf_options.downforce_max_parallel_compactions;
       if (limit >= 0 &&
           static_cast<int>(level0_compactions_in_progress_.size()) >= limit) {
+        printf("[DEBUG] CompactionPicker::CompactRange: level0_compactions_in_progress_.size() >= limit\n");
         *manual_conflict = true;
         return nullptr;
       }
@@ -966,7 +984,43 @@ Status CompactionPicker::SanitizeCompactionInputFilesForAllLevels(
         is_first = true;
       }
     }
-    if (last_included == kNotFound) {
+    
+    // DownForce: If no files in input_files for this level, but there are
+    // being_compacted files, we still need to include their key range in
+    // aggregated_file_meta to ensure overlapping files in lower levels are included
+    /*if (last_included == kNotFound && l >= 1) {
+      // Check if there are being_compacted files that should be considered
+      bool has_being_compacted = false;
+      for (size_t f = 0; f < current_files.size(); ++f) {
+        if (current_files[f].being_compacted) {
+          has_being_compacted = true;
+          // Update key range to include being_compacted files
+          if (is_first == false) {
+            smallestkey = current_files[f].smallestkey;
+            largestkey = current_files[f].largestkey;
+            is_first = true;
+          } else {
+            if (comparator->CompareWithoutTimestamp(
+                    smallestkey, current_files[f].smallestkey) > 0) {
+              smallestkey = current_files[f].smallestkey;
+            }
+            if (comparator->CompareWithoutTimestamp(
+                    largestkey, current_files[f].largestkey) < 0) {
+              largestkey = current_files[f].largestkey;
+            }
+          }
+          // Set first_included and last_included to include being_compacted files
+          // for key range expansion, but we won't add them to input_files
+          first_included = std::min(first_included, static_cast<int>(f));
+          last_included = std::max(last_included, static_cast<int>(f));
+        }
+      }
+      if (!has_being_compacted) {
+        continue;  // No files at all in this level, skip it
+      }
+      // Continue to process being_compacted files for key range expansion
+    } else */
+     if (last_included == kNotFound) {
       continue;
     }
 
@@ -1236,8 +1290,9 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 }
 
 bool CompactionPicker::GetOverlappingL0Files(
-    VersionStorageInfo* vstorage, CompactionInputFiles* start_level_inputs,
-    int output_level, int* parent_index) {
+    [[maybe_unused]] const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
+    CompactionInputFiles* start_level_inputs, int output_level,
+    int* parent_index) {
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
    
@@ -1250,21 +1305,39 @@ bool CompactionPicker::GetOverlappingL0Files(
 
   // DownForce: if there are running L0 compactions, only allow proceeding
   // when under the configured cap. Otherwise, block by returning false.
-  if (!level0_compactions_in_progress()->empty()) {
+
+  //int limit = mutable_cf_options.downforce_max_parallel_compactions;
+  //if (!level0_compactions_in_progress()->empty() && static_cast<int>(level0_compactions_in_progress_.size()) < limit) {
+  /*
+  if (static_cast<int>(level0_compactions_in_progress_.size())  limit) {
+    printf("[DEBUG] CompactionPicker::GetOverlappingL0Files: static_cast<int>(level0_compactions_in_progress_.size()) < limit\n");
     return true;
     // We don't have direct access to MutableCFOptions here; rely on global cap
     // via the picker state by checking size against no cap semantics.
     // Conservatively allow to proceed; upper-level gating will enforce cap.
   }
+  */
+  
+  if (!level0_compactions_in_progress()->empty()) {
+    return true;
+  }
+/*
+  if(static_cast<int>(level0_compactions_in_progress_.size()) < mutable_cf_options.downforce_max_parallel_compactions){
+    return true;
+  }
+  else{
+    return false; //break compaction
+  }
+ */
 
   start_level_inputs->files.clear();
   vstorage->GetOverlappingInputs(0, &smallest, &largest,
                                  &(start_level_inputs->files));
 
   // L0 전용: 입력 파일 중 진행중인 컴팩션이 있으면 선택 중단하여 충돌을 방지한다.
-  if (AreFilesInCompaction(start_level_inputs->files)) {
-    return false;
-  }
+  // if (AreFilesInCompaction(start_level_inputs->files)) { //yhh1210: disabled for checking 
+  //   return false;
+  // }
 
   // If we include more L0 files in the same compaction run it can
   // cause the 'smallest' and 'largest' key to get extended to a

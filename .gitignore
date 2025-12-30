@@ -103,3 +103,9 @@ cmake-build-*
 third-party/folly/
 .cache
 *.sublime-*
+
+YHH's_cursor_report_markdown/
+db_bench_*
+db_bench-debug
+report.csv
+.cursor/

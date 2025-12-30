@@ -946,6 +946,16 @@ class DBImpl : public DB {
     return num_running_compactions_;
   }
 
+  int num_running_l0_compactions() {
+    mutex_.AssertHeld();
+    return num_running_l0_compactions_;
+  }
+
+  int num_running_l1_compactions() {
+    mutex_.AssertHeld();
+    return num_running_l1_compactions_;
+  }
+
   const WriteController& write_controller() { return write_controller_; }
 
   // hollow transactions shell used for recovery.
@@ -2867,6 +2877,12 @@ class DBImpl : public DB {
 
   // stores the number of compactions are currently running
   int num_running_compactions_;
+
+  // stores the number of L0 compactions are currently running
+  int num_running_l0_compactions_;
+
+  // stores the number of L1 compactions are currently running
+  int num_running_l1_compactions_;
 
   // number of background memtable flush jobs, submitted to the HIGH pool
   int bg_flush_scheduled_;

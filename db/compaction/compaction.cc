@@ -906,9 +906,10 @@ bool Compaction::ShouldFormSubcompactions() const {
   }
 
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {
-    // return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
-    if(start_level_ > 0) return true;
-    else return false;
+    printf("[DEBUG] Compaction::ShouldFormSubcompactions: start_level_ = %d, output_level_ = %d\n", start_level_, output_level_);
+    return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
+    //if(start_level_ > 0) return true;
+    //else return false;
   } else if (cfd_->ioptions()->compaction_style == kCompactionStyleUniversal) {
     return number_levels_ > 1 && output_level_ > 0;
   } else {

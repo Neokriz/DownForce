@@ -232,7 +232,14 @@ void LevelCompactionBuilder::SetupInitialFiles() {
         // didn't find the compaction, clear the inputs
         start_level_inputs_.clear();
         if (start_level_ == 0) {
-          // skipped_l0_to_base = true;
+          int limit = mutable_cf_options_.downforce_max_parallel_compactions;
+          if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+            // nothing to do
+          }
+          else{
+            skipped_l0_to_base = true; //default
+          }
+          
           
           // L0->base_level may be blocked due to ongoing L0->base_level
           // compactions. It may also be blocked by an ongoing compaction from
@@ -331,7 +338,8 @@ void LevelCompactionBuilder::SetupInitialFiles() {
 bool LevelCompactionBuilder::SetupOtherL0FilesIfNeeded() {
   if (start_level_ == 0 && output_level_ != 0 && !is_l0_trivial_move_) {
     return compaction_picker_->GetOverlappingL0Files(
-        vstorage_, &start_level_inputs_, output_level_, &parent_index_);
+        mutable_cf_options_, vstorage_, &start_level_inputs_, output_level_,
+        &parent_index_);
   }
   return true;
 }
@@ -518,26 +526,46 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
     return nullptr;
   }
   assert(start_level_ >= 0 && output_level_ >= 0);
-
+  int limit = mutable_cf_options_.downforce_max_parallel_compactions;
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
     // return nullptr;
-    if(start_level_ != 0) return nullptr;
+    printf("[DEBUG] LevelCompactionBuilder::PickCompaction: SetupOtherL0FilesIfNeeded = false\n");
+    if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+      if(start_level_ != 0) return nullptr;
+    }
+    else{
+      return nullptr; //default
+    }
   }
 
   // Pick files in the output level and expand more files in the start level
   // if needed.
   if (!SetupOtherInputsIfNeeded()) {
-   if(start_level_ != 0) return nullptr;
-   // return nullptr;
+    // printf("[DEBUG] LevelCompactionBuilder::PickCompaction: SetupOtherInputsIfNeeded = false\n");
+    if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+      if(start_level_ != 0) return nullptr;
+    }
+    else{
+      return nullptr; //default
+    }
   }
 
   // Form a compaction object containing the files we picked.
   Compaction* c = GetCompaction();
 
-  if(start_level_inputs_.size() + output_level_inputs_.size() <= 1) 
-    return nullptr;
+  
+  //if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+    if(start_level_inputs_.size() + output_level_inputs_.size() <= 1){ 
+      printf("[DEBUG] LevelCompactionBuilder::PickCompaction: start_level_inputs_.size() + output_level_inputs_.size() <= 1\n");
+      return nullptr;
+    }
+  //}
+  //else{
+    // nothing to do
+  //}
+
 
   TEST_SYNC_POINT_CALLBACK("LevelCompactionPicker::PickCompaction:Return", c);
 
@@ -553,9 +581,18 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   // pull in more L0s.
   assert(!compaction_inputs_.empty());
 
-  if(compaction_inputs_.size() == 0){
-     return nullptr;
-  }
+  //int limit = mutable_cf_options_.downforce_max_parallel_compactions;
+  //if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+    if(compaction_inputs_.size() == 0){
+      // printf("[DEBUG] LevelCompactionBuilder::GetCompaction: compaction_inputs_.size() == 0\n");
+      return nullptr;
+    }
+  //}
+  //else{
+    // default
+    // nothing to do
+ // }
+  
 
   bool l0_files_might_overlap =
       start_level_ == 0 && !is_l0_trivial_move_ &&
@@ -668,7 +705,9 @@ bool LevelCompactionBuilder::TryPickL0TrivialMove() {
         vstorage_->LevelFiles(start_level_);
 
     InternalKey my_smallest, my_largest;
+    //int i=0;
     for (auto it = level_files.rbegin(); it != level_files.rend(); ++it) {
+      //printf("[DEBUG] LevelCompactionBuilder::TryPickL0TrivialMove: i = %d\n", i++);
       CompactionInputFiles output_level_inputs;
       output_level_inputs.level = output_level_;
       FileMetaData* file = *it;
@@ -708,8 +747,10 @@ bool LevelCompactionBuilder::TryPickL0TrivialMove() {
               });
 
     is_l0_trivial_move_ = true;
+    //printf("[DEBUG] LevelCompactionBuilder::TryPickL0TrivialMove:\n");
     return true;
   }
+  //printf("[DEBUG] LevelCompactionBuilder::TryPickL0TrivialMove: start_level_inputs_.empty()\n");
   return false;
 }
 
@@ -805,29 +846,45 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   // than one concurrent compactions at this level. This
   // could be made better by looking at key-ranges that are
   // being compacted at level 0.
-
+  int limit = mutable_cf_options_.downforce_max_parallel_compactions;
+  /*
+  
   // DownForce: cap concurrent L0 compactions by mutable option when specified
   if (start_level_ == 0) {
-    int limit = mutable_cf_options_.downforce_max_parallel_compactions;
-    if (limit >= 0 &&
-        static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) >= limit) {
+    
+    if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
+      // nothing to do
+      // printf("[DEBUG] LevelCompactionBuilder::PickFileToCompact: start_level_ == 0\n");
+    }
+    else{ // l0 onging default
+      // printf("[DEBUG] LevelCompactionBuilder::PickFileToCompact: start_level_ == 0, l0 onging default\n");
+      if (PickSizeBasedIntraL0Compaction()) {
+        return true;
+      }
+      TEST_SYNC_POINT("LevelCompactionPicker::PickCompactionBySize:0");
       return false;
     }
   }
+    */
 
   start_level_inputs_.clear();
   start_level_inputs_.level = start_level_;
 
   assert(start_level_ >= 0);
 
-  // if (TryPickL0TrivialMove()) {
-  //  return true;
-  //}
-  
-  // Prevent intra-L0 compaction.
-  // if (start_level_ == 0 && PickSizeBasedIntraL0Compaction()) {
-  //  return true;
-  //}
+  /*
+  if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){ 
+    // to do nothing
+  }
+  else{
+    if (TryPickL0TrivialMove()) {
+      return true;
+    }
+    if (start_level_ == 0 && PickSizeBasedIntraL0Compaction()) {
+      return true;
+    }
+  }
+*/
 
   const std::vector<FileMetaData*>& level_files =
       vstorage_->LevelFiles(start_level_);
@@ -869,6 +926,15 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       // user-key overlap.
 
       // start_level_inputs_.clear();
+      //printf("[DEBUG] LevelCompactionBuilder::PickFileToCompact: user-key overlap\n");
+      if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){ 
+        // nothing to do
+      }
+      else{
+        // default
+        //printf("[DEBUG] LevelCompactionBuilder::PickFileToCompact: start_level_inputs_.clear()\n");
+        start_level_inputs_.clear();
+      }
 
       if (ioptions_.compaction_pri == kRoundRobin) {
         return false;
@@ -876,8 +942,26 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       continue;
     }
 
+    // disable, seg..
     if(start_level_inputs_.size() <= 0) 
-      return start_level_inputs_.size() > 0;
+      return false;
+    else
+      return true;
+    
+
+    /*
+    if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit - 1){ 
+      // df
+      if(start_level_inputs_.size() <= 0) 
+        return false;
+      else
+        return true;
+      
+    }
+    else{
+      // default
+    }
+    */
 
     // Now that input level is fully expanded, we check whether any output
     // files are locked due to pending compaction.

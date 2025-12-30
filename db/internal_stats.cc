@@ -301,6 +301,8 @@ static const std::string aggregated_table_properties =
 static const std::string aggregated_table_properties_at_level =
     aggregated_table_properties + "-at-level";
 static const std::string num_running_compactions = "num-running-compactions";
+static const std::string num_running_l0_compactions = "num-running-l0-compactions";
+static const std::string num_running_l1_compactions = "num-running-l1-compactions";
 static const std::string num_running_flushes = "num-running-flushes";
 static const std::string actual_delayed_write_rate =
     "actual-delayed-write-rate";
@@ -351,6 +353,10 @@ const std::string DB::Properties::kCompactionPending =
     rocksdb_prefix + compaction_pending;
 const std::string DB::Properties::kNumRunningCompactions =
     rocksdb_prefix + num_running_compactions;
+const std::string DB::Properties::kNumRunningL0Compactions =
+    rocksdb_prefix + num_running_l0_compactions;
+const std::string DB::Properties::kNumRunningL1Compactions =
+    rocksdb_prefix + num_running_l1_compactions;
 const std::string DB::Properties::kNumRunningFlushes =
     rocksdb_prefix + num_running_flushes;
 const std::string DB::Properties::kBackgroundErrors =
@@ -579,6 +585,12 @@ const UnorderedMap<std::string, DBPropertyInfo>
           nullptr}},
         {DB::Properties::kNumRunningCompactions,
          {false, nullptr, &InternalStats::HandleNumRunningCompactions, nullptr,
+          nullptr}},
+        {DB::Properties::kNumRunningL0Compactions,
+          {false, nullptr, &InternalStats::HandleNumRunningL0Compactions, nullptr,
+          nullptr}},
+        {DB::Properties::kNumRunningL1Compactions,
+          {false, nullptr, &InternalStats::HandleNumRunningL1Compactions, nullptr,
           nullptr}},
         {DB::Properties::kActualDelayedWriteRate,
          {false, nullptr, &InternalStats::HandleActualDelayedWriteRate, nullptr,
@@ -1262,6 +1274,18 @@ bool InternalStats::HandleCompactionPending(uint64_t* value, DBImpl* /*db*/,
 bool InternalStats::HandleNumRunningCompactions(uint64_t* value, DBImpl* db,
                                                 Version* /*version*/) {
   *value = db->num_running_compactions_;
+  return true;
+}
+
+bool InternalStats::HandleNumRunningL0Compactions(uint64_t* value, DBImpl* db,
+  Version* /*version*/) {
+  *value = db->num_running_l0_compactions_;
+  return true;
+}
+
+bool InternalStats::HandleNumRunningL1Compactions(uint64_t* value, DBImpl* db,
+  Version* /*version*/) {
+  *value = db->num_running_l1_compactions_;
   return true;
 }
 
