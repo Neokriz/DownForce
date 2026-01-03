@@ -80,7 +80,8 @@ Status VerifySstFileChecksumInternal(const Options& options,
           std::move(file), file_path, ioptions.clock, nullptr /* io_tracer */,
           ioptions.stats /* stats */,
           Histograms::SST_READ_MICROS /* hist_type */,
-          nullptr /* file_read_hist */, ioptions.rate_limiter.get()));
+          nullptr /* file_read_hist */, nullptr /* user_read_hist */,
+          nullptr /* background_read_hist */, ioptions.rate_limiter.get()));
   const bool kImmortal = true;
   auto reader_options = TableReaderOptions(
       ioptions, options.prefix_extractor, env_options, internal_comparator,

@@ -1725,7 +1725,9 @@ class VersionBuilder::Rep {
             read_options, file_options_,
             *(base_vstorage_->InternalComparator()), *file_meta, &handle,
             mutable_cf_options, false /*no_io */,
-            internal_stats->GetFileReadHist(level), false, level,
+            internal_stats->GetFileReadHist(level),
+            internal_stats->GetUserFileReadHist(level),
+            internal_stats->GetBackgroundFileReadHist(level), false, level,
             prefetch_index_and_filter_in_cache, max_file_size_for_l0_meta_pin,
             file_meta->temperature);
         if (handle != nullptr) {

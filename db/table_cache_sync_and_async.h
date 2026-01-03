@@ -15,10 +15,12 @@ namespace ROCKSDB_NAMESPACE {
 
 // Batched version of TableCache::MultiGet.
 DEFINE_SYNC_AND_ASYNC(Status, TableCache::MultiGet)
-(const ReadOptions& options, const InternalKeyComparator& internal_comparator,
- const FileMetaData& file_meta, const MultiGetContext::Range* mget_range,
- const MutableCFOptions& mutable_cf_options, HistogramImpl* file_read_hist,
- bool skip_filters, bool skip_range_deletions, int level, TypedHandle* handle) {
+ (const ReadOptions& options, const InternalKeyComparator& internal_comparator,
+  const FileMetaData& file_meta, const MultiGetContext::Range* mget_range,
+  const MutableCFOptions& mutable_cf_options, HistogramImpl* file_read_hist,
+  HistogramImpl* user_read_hist, HistogramImpl* background_read_hist,
+  bool skip_filters, bool skip_range_deletions, int level,
+  TypedHandle* handle) {
   auto& fd = file_meta.fd;
   Status s;
   TableReader* t = fd.table_reader;
@@ -72,7 +74,8 @@ DEFINE_SYNC_AND_ASYNC(Status, TableCache::MultiGet)
       s = FindTable(options, file_options_, internal_comparator, file_meta,
                     &handle, mutable_cf_options,
                     options.read_tier == kBlockCacheTier /* no_io */,
-                    file_read_hist, skip_filters, level,
+                    file_read_hist, user_read_hist, background_read_hist,
+                    skip_filters, level,
                     true /* prefetch_index_and_filter_in_cache */,
                     0 /*max_file_size_for_l0_meta_pin*/, file_meta.temperature);
       TEST_SYNC_POINT_CALLBACK("TableCache::MultiGet:FindTable", &s);

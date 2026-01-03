@@ -736,6 +736,11 @@ Status CompactionJob::Run() {
             *compact_->compaction->mutable_cf_options(),
             /*table_reader_ptr=*/nullptr,
             cfd->internal_stats()->GetFileReadHist(
+                compact_->compaction->output_level(),
+                TableReaderCaller::kCompactionRefill),
+            cfd->internal_stats()->GetUserFileReadHist(
+                compact_->compaction->output_level()),
+            cfd->internal_stats()->GetBackgroundFileReadHist(
                 compact_->compaction->output_level()),
             TableReaderCaller::kCompactionRefill, /*arena=*/nullptr,
             /*skip_filters=*/false, compact_->compaction->output_level(),

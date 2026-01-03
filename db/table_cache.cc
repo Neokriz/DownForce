@@ -91,7 +91,9 @@ Status TableCache::GetTableReader(
     const ReadOptions& ro, const FileOptions& file_options,
     const InternalKeyComparator& internal_comparator,
     const FileMetaData& file_meta, bool sequential_mode,
-    HistogramImpl* file_read_hist, std::unique_ptr<TableReader>* table_reader,
+    HistogramImpl* file_read_hist, HistogramImpl* user_read_hist,
+    HistogramImpl* background_read_hist,
+    std::unique_ptr<TableReader>* table_reader,
     const MutableCFOptions& mutable_cf_options, bool skip_filters, int level,
     bool prefetch_index_and_filter_in_cache,
     size_t max_file_size_for_l0_meta_pin, Temperature file_temperature) {
@@ -136,7 +138,9 @@ Status TableCache::GetTableReader(
     std::unique_ptr<RandomAccessFileReader> file_reader(
         new RandomAccessFileReader(std::move(file), fname, ioptions_.clock,
                                    io_tracer_, ioptions_.stats, SST_READ_MICROS,
-                                   file_read_hist, ioptions_.rate_limiter.get(),
+                                   file_read_hist, user_read_hist,
+                                   background_read_hist,
+                                   ioptions_.rate_limiter.get(),
                                    ioptions_.listeners, file_temperature,
                                    level == ioptions_.num_levels - 1));
     UniqueId64x2 expected_unique_id;
@@ -174,7 +178,8 @@ Status TableCache::FindTable(
     const InternalKeyComparator& internal_comparator,
     const FileMetaData& file_meta, TypedHandle** handle,
     const MutableCFOptions& mutable_cf_options, const bool no_io,
-    HistogramImpl* file_read_hist, bool skip_filters, int level,
+    HistogramImpl* file_read_hist, HistogramImpl* user_read_hist,
+    HistogramImpl* background_read_hist, bool skip_filters, int level,
     bool prefetch_index_and_filter_in_cache,
     size_t max_file_size_for_l0_meta_pin, Temperature file_temperature) {
   PERF_TIMER_GUARD_WITH_CLOCK(find_table_nanos, ioptions_.clock);
@@ -197,11 +202,12 @@ Status TableCache::FindTable(
     }
 
     std::unique_ptr<TableReader> table_reader;
-    Status s = GetTableReader(ro, file_options, internal_comparator, file_meta,
-                              false /* sequential mode */, file_read_hist,
-                              &table_reader, mutable_cf_options, skip_filters,
-                              level, prefetch_index_and_filter_in_cache,
-                              max_file_size_for_l0_meta_pin, file_temperature);
+    Status s = GetTableReader(
+        ro, file_options, internal_comparator, file_meta,
+        false /* sequential mode */, file_read_hist, user_read_hist,
+        background_read_hist, &table_reader, mutable_cf_options, skip_filters,
+        level, prefetch_index_and_filter_in_cache,
+        max_file_size_for_l0_meta_pin, file_temperature);
     if (!s.ok()) {
       assert(table_reader == nullptr);
       RecordTick(ioptions_.stats, NO_FILE_ERRORS);
@@ -224,7 +230,8 @@ InternalIterator* TableCache::NewIterator(
     const InternalKeyComparator& icomparator, const FileMetaData& file_meta,
     RangeDelAggregator* range_del_agg,
     const MutableCFOptions& mutable_cf_options, TableReader** table_reader_ptr,
-    HistogramImpl* file_read_hist, TableReaderCaller caller, Arena* arena,
+    HistogramImpl* file_read_hist, HistogramImpl* user_read_hist,
+    HistogramImpl* background_read_hist, TableReaderCaller caller, Arena* arena,
     bool skip_filters, int level, size_t max_file_size_for_l0_meta_pin,
     const InternalKey* smallest_compaction_key,
     const InternalKey* largest_compaction_key, bool allow_unprepared_value,
@@ -245,7 +252,8 @@ InternalIterator* TableCache::NewIterator(
     s = FindTable(options, file_options, icomparator, file_meta, &handle,
                   mutable_cf_options,
                   options.read_tier == kBlockCacheTier /* no_io */,
-                  file_read_hist, skip_filters, level,
+                  file_read_hist, user_read_hist, background_read_hist,
+                  skip_filters, level,
                   true /* prefetch_index_and_filter_in_cache */,
                   max_file_size_for_l0_meta_pin, file_meta.temperature);
     if (s.ok()) {
@@ -434,7 +442,9 @@ Status TableCache::Get(const ReadOptions& options,
                        const FileMetaData& file_meta, const Slice& k,
                        GetContext* get_context,
                        const MutableCFOptions& mutable_cf_options,
-                       HistogramImpl* file_read_hist, bool skip_filters,
+                       HistogramImpl* file_read_hist,
+                       HistogramImpl* user_read_hist,
+                       HistogramImpl* background_read_hist, bool skip_filters,
                        int level, size_t max_file_size_for_l0_meta_pin) {
   auto& fd = file_meta.fd;
   std::string* row_cache_entry = nullptr;
@@ -462,7 +472,8 @@ Status TableCache::Get(const ReadOptions& options,
       s = FindTable(options, file_options_, internal_comparator, file_meta,
                     &handle, mutable_cf_options,
                     options.read_tier == kBlockCacheTier /* no_io */,
-                    file_read_hist, skip_filters, level,
+                    file_read_hist, user_read_hist, background_read_hist,
+                    skip_filters, level,
                     true /* prefetch_index_and_filter_in_cache */,
                     max_file_size_for_l0_meta_pin, file_meta.temperature);
       if (s.ok()) {
@@ -544,7 +555,8 @@ Status TableCache::MultiGetFilter(
     const ReadOptions& options,
     const InternalKeyComparator& internal_comparator,
     const FileMetaData& file_meta, const MutableCFOptions& mutable_cf_options,
-    HistogramImpl* file_read_hist, int level,
+    HistogramImpl* file_read_hist, HistogramImpl* user_read_hist,
+    HistogramImpl* background_read_hist, int level,
     MultiGetContext::Range* mget_range, TypedHandle** table_handle) {
   auto& fd = file_meta.fd;
   IterKey row_cache_key;
@@ -566,7 +578,7 @@ Status TableCache::MultiGetFilter(
     s = FindTable(options, file_options_, internal_comparator, file_meta,
                   &handle, mutable_cf_options,
                   options.read_tier == kBlockCacheTier /* no_io */,
-                  file_read_hist,
+                  file_read_hist, user_read_hist, background_read_hist,
                   /*skip_filters=*/false, level,
                   true /* prefetch_index_and_filter_in_cache */,
                   /*max_file_size_for_l0_meta_pin=*/0, file_meta.temperature);

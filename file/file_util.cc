@@ -211,7 +211,9 @@ IOStatus GenerateOneFileChecksum(
     }
     reader.reset(new RandomAccessFileReader(
         std::move(r_file), file_path, clock, io_tracer, stats,
-        Histograms::SST_READ_MICROS, nullptr, rate_limiter));
+        Histograms::SST_READ_MICROS, nullptr /* file_read_hist */,
+        nullptr /* user_read_hist */, nullptr /* background_read_hist */,
+        rate_limiter));
   }
 
   // Found that 256 KB readahead size provides the best performance, based on

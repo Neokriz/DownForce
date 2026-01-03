@@ -1085,6 +1085,15 @@ class DB {
     //      level, as well as the histogram of latency of single requests.
     static const std::string kCFFileHistogram;
 
+    //  "rocksdb.cf-user-file-read-histogram" - returns a string representation
+    //      of the histogram of user file read latency by level.
+    static const std::string kCFUserFileReadHistogram;
+
+    //  "rocksdb.cf-background-file-read-histogram" - returns a string
+    //      representation of the histogram of background file read latency by
+    //      level.
+    static const std::string kCFBackgroundFileReadHistogram;
+
     // "rocksdb.cf-write-stall-stats" - returns a multi-line string or
     //      map with statistics on CF-scope write stalls for a given CF
     // See`WriteStallStatsMapKeys` for structured representation of keys

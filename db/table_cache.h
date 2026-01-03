@@ -94,6 +94,7 @@ class TableCache {
       const FileMetaData& file_meta, RangeDelAggregator* range_del_agg,
       const MutableCFOptions& mutable_cf_options,
       TableReader** table_reader_ptr, HistogramImpl* file_read_hist,
+      HistogramImpl* user_read_hist, HistogramImpl* background_read_hist,
       TableReaderCaller caller, Arena* arena, bool skip_filters, int level,
       size_t max_file_size_for_l0_meta_pin,
       const InternalKey* smallest_compaction_key,
@@ -116,8 +117,11 @@ class TableCache {
              const FileMetaData& file_meta, const Slice& k,
              GetContext* get_context,
              const MutableCFOptions& mutable_cf_options,
-             HistogramImpl* file_read_hist = nullptr, bool skip_filters = false,
-             int level = -1, size_t max_file_size_for_l0_meta_pin = 0);
+             HistogramImpl* file_read_hist = nullptr,
+             HistogramImpl* user_read_hist = nullptr,
+             HistogramImpl* background_read_hist = nullptr,
+             bool skip_filters = false, int level = -1,
+             size_t max_file_size_for_l0_meta_pin = 0);
 
   // Return the range delete tombstone iterator of the file specified by
   // `file_meta`.
@@ -136,7 +140,9 @@ class TableCache {
                         const InternalKeyComparator& internal_comparator,
                         const FileMetaData& file_meta,
                         const MutableCFOptions& mutable_cf_options,
-                        HistogramImpl* file_read_hist, int level,
+                        HistogramImpl* file_read_hist,
+                        HistogramImpl* user_read_hist,
+                        HistogramImpl* background_read_hist, int level,
                         MultiGetContext::Range* mget_range,
                         TypedHandle** table_handle);
 
@@ -155,6 +161,8 @@ class TableCache {
                          const MultiGetContext::Range* mget_range,
                          const MutableCFOptions& mutable_cf_options,
                          HistogramImpl* file_read_hist = nullptr,
+                         HistogramImpl* user_read_hist = nullptr,
+                         HistogramImpl* background_read_hist = nullptr,
                          bool skip_filters = false,
                          bool skip_range_deletions = false, int level = -1,
                          TypedHandle* table_handle = nullptr);
@@ -181,6 +189,8 @@ class TableCache {
                    const MutableCFOptions& mutable_cf_options,
                    const bool no_io = false,
                    HistogramImpl* file_read_hist = nullptr,
+                   HistogramImpl* user_read_hist = nullptr,
+                   HistogramImpl* background_read_hist = nullptr,
                    bool skip_filters = false, int level = -1,
                    bool prefetch_index_and_filter_in_cache = true,
                    size_t max_file_size_for_l0_meta_pin = 0,
@@ -249,6 +259,8 @@ class TableCache {
                         const InternalKeyComparator& internal_comparator,
                         const FileMetaData& file_meta, bool sequential_mode,
                         HistogramImpl* file_read_hist,
+                        HistogramImpl* user_read_hist,
+                        HistogramImpl* background_read_hist,
                         std::unique_ptr<TableReader>* table_reader,
                         const MutableCFOptions& mutable_cf_options,
                         bool skip_filters = false, int level = -1,

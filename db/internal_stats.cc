@@ -248,6 +248,10 @@ static const std::string cfstats = "cfstats";
 static const std::string cfstats_no_file_histogram =
     "cfstats-no-file-histogram";
 static const std::string cf_file_histogram = "cf-file-histogram";
+static const std::string cf_user_file_read_histogram =
+    "cf-user-file-read-histogram";
+static const std::string cf_background_file_read_histogram =
+    "cf-background-file-read-histogram";
 static const std::string cf_write_stall_stats = "cf-write-stall-stats";
 static const std::string dbstats = "dbstats";
 static const std::string db_write_stall_stats = "db-write-stall-stats";
@@ -333,6 +337,10 @@ const std::string DB::Properties::kCFStatsNoFileHistogram =
     rocksdb_prefix + cfstats_no_file_histogram;
 const std::string DB::Properties::kCFFileHistogram =
     rocksdb_prefix + cf_file_histogram;
+const std::string DB::Properties::kCFUserFileReadHistogram =
+    rocksdb_prefix + cf_user_file_read_histogram;
+const std::string DB::Properties::kCFBackgroundFileReadHistogram =
+    rocksdb_prefix + cf_background_file_read_histogram;
 const std::string DB::Properties::kCFWriteStallStats =
     rocksdb_prefix + cf_write_stall_stats;
 const std::string DB::Properties::kDBWriteStallStats =
@@ -470,6 +478,12 @@ const UnorderedMap<std::string, DBPropertyInfo>
         {DB::Properties::kCFFileHistogram,
          {false, &InternalStats::HandleCFFileHistogram, nullptr, nullptr,
           nullptr}},
+        {DB::Properties::kCFUserFileReadHistogram,
+         {false, &InternalStats::HandleCFUserFileReadHistogram, nullptr,
+          nullptr, nullptr}},
+        {DB::Properties::kCFBackgroundFileReadHistogram,
+         {false, &InternalStats::HandleCFBackgroundFileReadHistogram, nullptr,
+          nullptr, nullptr}},
         {DB::Properties::kCFWriteStallStats,
          {false, &InternalStats::HandleCFWriteStallStats, nullptr,
           &InternalStats::HandleCFWriteStallStatsMap, nullptr}},
@@ -646,6 +660,8 @@ InternalStats::InternalStats(int num_levels, SystemClock* clock,
       comp_stats_(num_levels),
       comp_stats_by_pri_(Env::Priority::TOTAL),
       file_read_latency_(num_levels),
+      user_file_read_latency_(num_levels),
+      background_file_read_latency_(num_levels),
       has_cf_change_since_dump_(true),
       bg_error_count_(0),
       number_levels_(num_levels),
@@ -1120,6 +1136,18 @@ bool InternalStats::HandleCFStatsNoFileHistogram(std::string* value,
 bool InternalStats::HandleCFFileHistogram(std::string* value,
                                           Slice /*suffix*/) {
   DumpCFFileHistogram(value);
+  return true;
+}
+
+bool InternalStats::HandleCFUserFileReadHistogram(std::string* value,
+                                                  Slice /*suffix*/) {
+  DumpCFUserFileReadHistogram(value);
+  return true;
+}
+
+bool InternalStats::HandleCFBackgroundFileReadHistogram(std::string* value,
+                                                        Slice /*suffix*/) {
+  DumpCFBackgroundFileReadHistogram(value);
   return true;
 }
 
@@ -2156,6 +2184,43 @@ void InternalStats::DumpCFFileHistogram(std::string* value) {
   if (!blob_file_read_latency_.Empty()) {
     oss << "** Blob file read latency histogram (micros):\n"
         << blob_file_read_latency_.ToString() << '\n';
+  }
+
+  value->append(oss.str());
+}
+
+void InternalStats::DumpCFBackgroundFileReadHistogram(std::string* value) {
+  assert(value);
+  assert(cfd_);
+
+  std::ostringstream oss;
+  oss << "\n** Background File Read Latency Histogram By Level ["
+      << cfd_->GetName() << "] **\n";
+
+  for (int level = 0; level < number_levels_; level++) {
+    if (!background_file_read_latency_[level].Empty()) {
+      oss << "** Level " << level
+          << " background read latency histogram (micros):\n"
+          << background_file_read_latency_[level].ToString() << '\n';
+    }
+  }
+
+  value->append(oss.str());
+}
+
+void InternalStats::DumpCFUserFileReadHistogram(std::string* value) {
+  assert(value);
+  assert(cfd_);
+
+  std::ostringstream oss;
+  oss << "\n** User File Read Latency Histogram By Level [" << cfd_->GetName()
+      << "] **\n";
+
+  for (int level = 0; level < number_levels_; level++) {
+    if (!user_file_read_latency_[level].Empty()) {
+      oss << "** Level " << level << " user read latency histogram (micros):\n"
+          << user_file_read_latency_[level].ToString() << '\n';
+    }
   }
 
   value->append(oss.str());

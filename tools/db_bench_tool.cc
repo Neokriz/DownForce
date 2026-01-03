@@ -1464,6 +1464,14 @@ DEFINE_int32(stats_per_interval, 0,
              "Reports additional stats per interval when this is greater than "
              "0.");
 
+DEFINE_int32(user_read_latency_interval, 0,
+             "Reports user read latency by level per interval when this is "
+             "greater than 0.");
+
+DEFINE_int32(background_read_latency_interval, 0,
+             "Reports background read latency by level per interval when this "
+             "is greater than 0.");
+
 DEFINE_uint64(slow_usecs, 1000000,
               "A message is printed for operations that take at least this "
               "many microseconds.");
@@ -2505,6 +2513,48 @@ class Stats {
                     }
                   }
                 }
+              }
+            }
+          }
+
+          if (id_ == 0 && FLAGS_user_read_latency_interval > 0 &&
+              (done_ / FLAGS_stats_interval) %
+                      FLAGS_user_read_latency_interval ==
+                  0) {
+            std::string stats;
+            if (db_with_cfh && db_with_cfh->num_created.load()) {
+              for (size_t i = 0; i < db_with_cfh->num_created.load(); ++i) {
+                if (db->GetProperty(db_with_cfh->cfh[i],
+                                    "rocksdb.cf-user-file-read-histogram",
+                                    &stats)) {
+                  fprintf(stderr, "%s\n", stats.c_str());
+                }
+              }
+            } else if (db) {
+              if (db->GetProperty("rocksdb.cf-user-file-read-histogram",
+                                  &stats)) {
+                fprintf(stderr, "%s", stats.c_str());
+              }
+            }
+          }
+
+          if (id_ == 0 && FLAGS_background_read_latency_interval > 0 &&
+              (done_ / FLAGS_stats_interval) %
+                      FLAGS_background_read_latency_interval ==
+                  0) {
+            std::string stats;
+            if (db_with_cfh && db_with_cfh->num_created.load()) {
+              for (size_t i = 0; i < db_with_cfh->num_created.load(); ++i) {
+                if (db->GetProperty(db_with_cfh->cfh[i],
+                                    "rocksdb.cf-background-file-read-histogram",
+                                    &stats)) {
+                  fprintf(stderr, "%s\n", stats.c_str());
+                }
+              }
+            } else if (db) {
+              if (db->GetProperty("rocksdb.cf-background-file-read-histogram",
+                                  &stats)) {
+                fprintf(stderr, "%s", stats.c_str());
               }
             }
           }

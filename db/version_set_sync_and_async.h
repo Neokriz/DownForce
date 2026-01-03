@@ -26,8 +26,11 @@ DEFINE_SYNC_AND_ASYNC(Status, Version::MultiGetFromSST)
   s = CO_AWAIT(table_cache_->MultiGet)(
       read_options, *internal_comparator(), *f->file_metadata, &file_range,
       mutable_cf_options_,
-      cfd_->internal_stats()->GetFileReadHist(hit_file_level), skip_filters,
-      skip_range_deletions, hit_file_level, table_handle);
+      cfd_->internal_stats()->GetFileReadHist(hit_file_level,
+                                              TableReaderCaller::kUserMultiGet),
+      cfd_->internal_stats()->GetUserFileReadHist(hit_file_level),
+      cfd_->internal_stats()->GetBackgroundFileReadHist(hit_file_level),
+      skip_filters, skip_range_deletions, hit_file_level, table_handle);
   // TODO: examine the behavior for corrupted key
   if (timer_enabled) {
     PERF_COUNTER_BY_LEVEL_ADD(get_from_table_nanos, timer.ElapsedNanos(),

@@ -267,11 +267,28 @@ IOStatus RandomAccessFileReader::Read(const IOOptions& opts, uint64_t offset,
     RecordIOStats(stats_, file_temperature_, is_last_level_, result->size());
     SetPerfLevel(prev_perf_level);
   }
-  if (stats_ != nullptr && file_read_hist_ != nullptr) {
-    file_read_hist_->Add(elapsed);
-  }
 
-#ifndef NDEBUG
+  if (stats_ != nullptr) {
+    // 1. Always record to the total histogram
+    if (file_read_hist_ != nullptr) {
+      file_read_hist_->Add(elapsed);
+    }
+
+    // 2. Separately record to User or Background histogram based on activity
+    if (opts.io_activity == Env::IOActivity::kGet ||
+        opts.io_activity == Env::IOActivity::kMultiGet ||
+        opts.io_activity == Env::IOActivity::kDBIterator) {
+      if (user_read_hist_ != nullptr) {
+        user_read_hist_->Add(elapsed);
+      }
+    } else {
+      if (background_read_hist_ != nullptr) {
+        background_read_hist_->Add(elapsed);
+      }
+    }
+  }
+  
+  #ifndef NDEBUG
   auto pair = std::make_pair(&file_name_, &io_s);
   if (offset == 0) {
     TEST_SYNC_POINT_CALLBACK("RandomAccessFileReader::Read::BeforeReturn",
@@ -467,8 +484,25 @@ IOStatus RandomAccessFileReader::MultiRead(const IOOptions& opts,
     }
     SetPerfLevel(prev_perf_level);
   }
-  if (stats_ != nullptr && file_read_hist_ != nullptr) {
-    file_read_hist_->Add(elapsed);
+
+  if (stats_ != nullptr) {
+    // 1. Always record to the total histogram
+    if (file_read_hist_ != nullptr) {
+      file_read_hist_->Add(elapsed);
+    }
+
+    // 2. Separately record to User or Background histogram based on activity
+    if (opts.io_activity == Env::IOActivity::kGet ||
+        opts.io_activity == Env::IOActivity::kMultiGet ||
+        opts.io_activity == Env::IOActivity::kDBIterator) {
+      if (user_read_hist_ != nullptr) {
+        user_read_hist_->Add(elapsed);
+      }
+    } else {
+      if (background_read_hist_ != nullptr) {
+        background_read_hist_->Add(elapsed);
+      }
+    }
   }
 
   return io_s;

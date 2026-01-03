@@ -130,7 +130,8 @@ Status BlobFileReader::OpenFile(
   file_reader->reset(new RandomAccessFileReader(
       std::move(file), blob_file_path, immutable_options.clock, io_tracer,
       immutable_options.stats, BLOB_DB_BLOB_FILE_READ_MICROS,
-      blob_file_read_hist, immutable_options.rate_limiter.get(),
+      blob_file_read_hist, nullptr /* user_read_hist */,
+      nullptr /* background_read_hist */, immutable_options.rate_limiter.get(),
       immutable_options.listeners));
 
   return Status::OK();

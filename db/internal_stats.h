@@ -571,6 +571,12 @@ class InternalStats {
     for (auto& h : file_read_latency_) {
       h.Clear();
     }
+    for (auto& h : user_file_read_latency_) {
+      h.Clear();
+    }
+    for (auto& h : background_file_read_latency_) {
+      h.Clear();
+    }
     blob_file_read_latency_.Clear();
     cf_stats_snapshot_.Clear();
     db_stats_snapshot_.Clear();
@@ -619,8 +625,23 @@ class InternalStats {
     return db_stats_[type].load(std::memory_order_relaxed);
   }
 
-  HistogramImpl* GetFileReadHist(int level) {
+  HistogramImpl* GetFileReadHist(int level,
+                                 TableReaderCaller caller =
+                                     TableReaderCaller::kUncategorized) {
+    if (caller == TableReaderCaller::kUserGet ||
+        caller == TableReaderCaller::kUserMultiGet ||
+        caller == TableReaderCaller::kUserIterator) {
+      return &user_file_read_latency_[level];
+    }
     return &file_read_latency_[level];
+  }
+
+  HistogramImpl* GetUserFileReadHist(int level) {
+    return &user_file_read_latency_[level];
+  }
+
+  HistogramImpl* GetBackgroundFileReadHist(int level) {
+    return &background_file_read_latency_[level];
   }
 
   HistogramImpl* GetBlobFileReadHist() { return &blob_file_read_latency_; }
@@ -688,6 +709,8 @@ class InternalStats {
   // if is_periodic = true, it is an internal call by RocksDB periodically to
   // dump the status.
   void DumpCFFileHistogram(std::string* value);
+  void DumpCFUserFileReadHistogram(std::string* value);
+  void DumpCFBackgroundFileReadHistogram(std::string* value);
 
   void DumpCFMapStatsWriteStall(std::map<std::string, std::string>* value);
   void DumpCFStatsWriteStall(std::string* value,
@@ -713,6 +736,8 @@ class InternalStats {
   std::vector<CompactionStats> comp_stats_by_pri_;
   CompactionStats per_key_placement_comp_stats_;
   std::vector<HistogramImpl> file_read_latency_;
+  std::vector<HistogramImpl> user_file_read_latency_;
+  std::vector<HistogramImpl> background_file_read_latency_;
   HistogramImpl blob_file_read_latency_;
   bool has_cf_change_since_dump_;
   // How many periods of no change since the last time stats are dumped for
@@ -820,6 +845,8 @@ class InternalStats {
   bool HandleCFStats(std::string* value, Slice suffix);
   bool HandleCFStatsNoFileHistogram(std::string* value, Slice suffix);
   bool HandleCFFileHistogram(std::string* value, Slice suffix);
+  bool HandleCFUserFileReadHistogram(std::string* value, Slice suffix);
+  bool HandleCFBackgroundFileReadHistogram(std::string* value, Slice suffix);
   bool HandleCFStatsPeriodic(std::string* value, Slice suffix);
   bool HandleCFWriteStallStats(std::string* value, Slice suffix);
   bool HandleCFWriteStallStatsMap(std::map<std::string, std::string>* values,
