@@ -131,8 +131,9 @@ Status BlobFileReader::OpenFile(
       std::move(file), blob_file_path, immutable_options.clock, io_tracer,
       immutable_options.stats, BLOB_DB_BLOB_FILE_READ_MICROS,
       blob_file_read_hist, nullptr /* user_read_hist */,
-      nullptr /* background_read_hist */, immutable_options.rate_limiter.get(),
-      immutable_options.listeners));
+      nullptr /* background_read_hist */, nullptr /* file_read_hist_int */,
+      nullptr /* user_read_hist_int */, nullptr /* background_read_hist_int */,
+      immutable_options.rate_limiter.get(), immutable_options.listeners));
 
   return Status::OK();
 }

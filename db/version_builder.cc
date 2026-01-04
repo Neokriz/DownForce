@@ -1727,7 +1727,11 @@ class VersionBuilder::Rep {
             mutable_cf_options, false /*no_io */,
             internal_stats->GetFileReadHist(level),
             internal_stats->GetUserFileReadHist(level),
-            internal_stats->GetBackgroundFileReadHist(level), false, level,
+            internal_stats->GetBackgroundFileReadHist(level),
+            internal_stats->GetFileReadHistInterval(level),
+            internal_stats->GetUserFileReadHistInterval(level),
+            internal_stats->GetBackgroundFileReadHistInterval(level), false,
+            level,
             prefetch_index_and_filter_in_cache, max_file_size_for_l0_meta_pin,
             file_meta->temperature);
         if (handle != nullptr) {

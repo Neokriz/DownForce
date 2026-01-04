@@ -252,6 +252,12 @@ static const std::string cf_user_file_read_histogram =
     "cf-user-file-read-histogram";
 static const std::string cf_background_file_read_histogram =
     "cf-background-file-read-histogram";
+static const std::string cf_file_read_histogram_interval =
+    "cf-file-read-histogram-interval";
+static const std::string cf_user_file_read_histogram_interval =
+    "cf-user-file-read-histogram-interval";
+static const std::string cf_background_file_read_histogram_interval =
+    "cf-background-file-read-histogram-interval";
 static const std::string cf_write_stall_stats = "cf-write-stall-stats";
 static const std::string dbstats = "dbstats";
 static const std::string db_write_stall_stats = "db-write-stall-stats";
@@ -341,6 +347,12 @@ const std::string DB::Properties::kCFUserFileReadHistogram =
     rocksdb_prefix + cf_user_file_read_histogram;
 const std::string DB::Properties::kCFBackgroundFileReadHistogram =
     rocksdb_prefix + cf_background_file_read_histogram;
+const std::string DB::Properties::kCFFileHistogramInterval =
+    rocksdb_prefix + cf_file_read_histogram_interval;
+const std::string DB::Properties::kCFUserFileReadHistogramInterval =
+    rocksdb_prefix + cf_user_file_read_histogram_interval;
+const std::string DB::Properties::kCFBackgroundFileReadHistogramInterval =
+    rocksdb_prefix + cf_background_file_read_histogram_interval;
 const std::string DB::Properties::kCFWriteStallStats =
     rocksdb_prefix + cf_write_stall_stats;
 const std::string DB::Properties::kDBWriteStallStats =
@@ -484,6 +496,15 @@ const UnorderedMap<std::string, DBPropertyInfo>
         {DB::Properties::kCFBackgroundFileReadHistogram,
          {false, &InternalStats::HandleCFBackgroundFileReadHistogram, nullptr,
           nullptr, nullptr}},
+        {DB::Properties::kCFFileHistogramInterval,
+         {false, &InternalStats::HandleCFFileHistogramInterval, nullptr,
+          nullptr, nullptr}},
+        {DB::Properties::kCFUserFileReadHistogramInterval,
+         {false, &InternalStats::HandleCFUserFileReadHistogramInterval, nullptr,
+          nullptr, nullptr}},
+        {DB::Properties::kCFBackgroundFileReadHistogramInterval,
+         {false, &InternalStats::HandleCFBackgroundFileReadHistogramInterval,
+          nullptr, nullptr, nullptr}},
         {DB::Properties::kCFWriteStallStats,
          {false, &InternalStats::HandleCFWriteStallStats, nullptr,
           &InternalStats::HandleCFWriteStallStatsMap, nullptr}},
@@ -662,6 +683,9 @@ InternalStats::InternalStats(int num_levels, SystemClock* clock,
       file_read_latency_(num_levels),
       user_file_read_latency_(num_levels),
       background_file_read_latency_(num_levels),
+      file_read_latency_int_(num_levels),
+      user_file_read_latency_int_(num_levels),
+      background_file_read_latency_int_(num_levels),
       has_cf_change_since_dump_(true),
       bg_error_count_(0),
       number_levels_(num_levels),
@@ -1148,6 +1172,24 @@ bool InternalStats::HandleCFUserFileReadHistogram(std::string* value,
 bool InternalStats::HandleCFBackgroundFileReadHistogram(std::string* value,
                                                         Slice /*suffix*/) {
   DumpCFBackgroundFileReadHistogram(value);
+  return true;
+}
+
+bool InternalStats::HandleCFFileHistogramInterval(std::string* value,
+                                                  Slice /*suffix*/) {
+  DumpCFFileHistogramInterval(value);
+  return true;
+}
+
+bool InternalStats::HandleCFUserFileReadHistogramInterval(std::string* value,
+                                                          Slice /*suffix*/) {
+  DumpCFUserFileReadHistogramInterval(value);
+  return true;
+}
+
+bool InternalStats::HandleCFBackgroundFileReadHistogramInterval(
+    std::string* value, Slice /*suffix*/) {
+  DumpCFBackgroundFileReadHistogramInterval(value);
   return true;
 }
 
@@ -2189,6 +2231,25 @@ void InternalStats::DumpCFFileHistogram(std::string* value) {
   value->append(oss.str());
 }
 
+void InternalStats::DumpCFFileHistogramInterval(std::string* value) {
+  assert(value);
+  assert(cfd_);
+
+  std::ostringstream oss;
+  oss << "\n** File Read Latency Histogram By Level (Interval) ["
+      << cfd_->GetName() << "] **\n";
+
+  for (int level = 0; level < number_levels_; level++) {
+    if (!file_read_latency_int_[level].Empty()) {
+      oss << "** Level " << level << " read latency histogram (micros):\n"
+          << file_read_latency_int_[level].ToString() << '\n';
+      file_read_latency_int_[level].Clear();
+    }
+  }
+
+  value->append(oss.str());
+}
+
 void InternalStats::DumpCFBackgroundFileReadHistogram(std::string* value) {
   assert(value);
   assert(cfd_);
@@ -2208,6 +2269,27 @@ void InternalStats::DumpCFBackgroundFileReadHistogram(std::string* value) {
   value->append(oss.str());
 }
 
+void InternalStats::DumpCFBackgroundFileReadHistogramInterval(
+    std::string* value) {
+  assert(value);
+  assert(cfd_);
+
+  std::ostringstream oss;
+  oss << "\n** Background File Read Latency Histogram By Level (Interval) ["
+      << cfd_->GetName() << "] **\n";
+
+  for (int level = 0; level < number_levels_; level++) {
+    if (!background_file_read_latency_int_[level].Empty()) {
+      oss << "** Level " << level
+          << " background read latency histogram (micros):\n"
+          << background_file_read_latency_int_[level].ToString() << '\n';
+      background_file_read_latency_int_[level].Clear();
+    }
+  }
+
+  value->append(oss.str());
+}
+
 void InternalStats::DumpCFUserFileReadHistogram(std::string* value) {
   assert(value);
   assert(cfd_);
@@ -2220,6 +2302,25 @@ void InternalStats::DumpCFUserFileReadHistogram(std::string* value) {
     if (!user_file_read_latency_[level].Empty()) {
       oss << "** Level " << level << " user read latency histogram (micros):\n"
           << user_file_read_latency_[level].ToString() << '\n';
+    }
+  }
+
+  value->append(oss.str());
+}
+
+void InternalStats::DumpCFUserFileReadHistogramInterval(std::string* value) {
+  assert(value);
+  assert(cfd_);
+
+  std::ostringstream oss;
+  oss << "\n** User File Read Latency Histogram By Level (Interval) ["
+      << cfd_->GetName() << "] **\n";
+
+  for (int level = 0; level < number_levels_; level++) {
+    if (!user_file_read_latency_int_[level].Empty()) {
+      oss << "** Level " << level << " user read latency histogram (micros):\n"
+          << user_file_read_latency_int_[level].ToString() << '\n';
+      user_file_read_latency_int_[level].Clear();
     }
   }
 

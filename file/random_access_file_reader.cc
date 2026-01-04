@@ -273,6 +273,9 @@ IOStatus RandomAccessFileReader::Read(const IOOptions& opts, uint64_t offset,
     if (file_read_hist_ != nullptr) {
       file_read_hist_->Add(elapsed);
     }
+    if (file_read_hist_int_ != nullptr) {
+      file_read_hist_int_->Add(elapsed);
+    }
 
     // 2. Separately record to User or Background histogram based on activity
     if (opts.io_activity == Env::IOActivity::kGet ||
@@ -281,9 +284,15 @@ IOStatus RandomAccessFileReader::Read(const IOOptions& opts, uint64_t offset,
       if (user_read_hist_ != nullptr) {
         user_read_hist_->Add(elapsed);
       }
+      if (user_read_hist_int_ != nullptr) {
+        user_read_hist_int_->Add(elapsed);
+      }
     } else {
       if (background_read_hist_ != nullptr) {
         background_read_hist_->Add(elapsed);
+      }
+      if (background_read_hist_int_ != nullptr) {
+        background_read_hist_int_->Add(elapsed);
       }
     }
   }
@@ -490,6 +499,9 @@ IOStatus RandomAccessFileReader::MultiRead(const IOOptions& opts,
     if (file_read_hist_ != nullptr) {
       file_read_hist_->Add(elapsed);
     }
+    if (file_read_hist_int_ != nullptr) {
+      file_read_hist_int_->Add(elapsed);
+    }
 
     // 2. Separately record to User or Background histogram based on activity
     if (opts.io_activity == Env::IOActivity::kGet ||
@@ -498,9 +510,15 @@ IOStatus RandomAccessFileReader::MultiRead(const IOOptions& opts,
       if (user_read_hist_ != nullptr) {
         user_read_hist_->Add(elapsed);
       }
+      if (user_read_hist_int_ != nullptr) {
+        user_read_hist_int_->Add(elapsed);
+      }
     } else {
       if (background_read_hist_ != nullptr) {
         background_read_hist_->Add(elapsed);
+      }
+      if (background_read_hist_int_ != nullptr) {
+        background_read_hist_int_->Add(elapsed);
       }
     }
   }

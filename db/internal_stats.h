@@ -577,6 +577,15 @@ class InternalStats {
     for (auto& h : background_file_read_latency_) {
       h.Clear();
     }
+    for (auto& h : file_read_latency_int_) {
+      h.Clear();
+    }
+    for (auto& h : user_file_read_latency_int_) {
+      h.Clear();
+    }
+    for (auto& h : background_file_read_latency_int_) {
+      h.Clear();
+    }
     blob_file_read_latency_.Clear();
     cf_stats_snapshot_.Clear();
     db_stats_snapshot_.Clear();
@@ -642,6 +651,18 @@ class InternalStats {
 
   HistogramImpl* GetBackgroundFileReadHist(int level) {
     return &background_file_read_latency_[level];
+  }
+
+  HistogramImpl* GetFileReadHistInterval(int level) {
+    return &file_read_latency_int_[level];
+  }
+
+  HistogramImpl* GetUserFileReadHistInterval(int level) {
+    return &user_file_read_latency_int_[level];
+  }
+
+  HistogramImpl* GetBackgroundFileReadHistInterval(int level) {
+    return &background_file_read_latency_int_[level];
   }
 
   HistogramImpl* GetBlobFileReadHist() { return &blob_file_read_latency_; }
@@ -711,6 +732,9 @@ class InternalStats {
   void DumpCFFileHistogram(std::string* value);
   void DumpCFUserFileReadHistogram(std::string* value);
   void DumpCFBackgroundFileReadHistogram(std::string* value);
+  void DumpCFFileHistogramInterval(std::string* value);
+  void DumpCFUserFileReadHistogramInterval(std::string* value);
+  void DumpCFBackgroundFileReadHistogramInterval(std::string* value);
 
   void DumpCFMapStatsWriteStall(std::map<std::string, std::string>* value);
   void DumpCFStatsWriteStall(std::string* value,
@@ -738,6 +762,9 @@ class InternalStats {
   std::vector<HistogramImpl> file_read_latency_;
   std::vector<HistogramImpl> user_file_read_latency_;
   std::vector<HistogramImpl> background_file_read_latency_;
+  std::vector<HistogramImpl> file_read_latency_int_;
+  std::vector<HistogramImpl> user_file_read_latency_int_;
+  std::vector<HistogramImpl> background_file_read_latency_int_;
   HistogramImpl blob_file_read_latency_;
   bool has_cf_change_since_dump_;
   // How many periods of no change since the last time stats are dumped for
@@ -847,6 +874,10 @@ class InternalStats {
   bool HandleCFFileHistogram(std::string* value, Slice suffix);
   bool HandleCFUserFileReadHistogram(std::string* value, Slice suffix);
   bool HandleCFBackgroundFileReadHistogram(std::string* value, Slice suffix);
+  bool HandleCFFileHistogramInterval(std::string* value, Slice suffix);
+  bool HandleCFUserFileReadHistogramInterval(std::string* value, Slice suffix);
+  bool HandleCFBackgroundFileReadHistogramInterval(std::string* value,
+                                                   Slice suffix);
   bool HandleCFStatsPeriodic(std::string* value, Slice suffix);
   bool HandleCFWriteStallStats(std::string* value, Slice suffix);
   bool HandleCFWriteStallStatsMap(std::map<std::string, std::string>* values,

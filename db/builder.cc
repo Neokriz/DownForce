@@ -429,6 +429,15 @@ Status BuildTable(
           (internal_stats == nullptr)
               ? nullptr
               : internal_stats->GetBackgroundFileReadHist(0),
+          (internal_stats == nullptr)
+              ? nullptr
+              : internal_stats->GetFileReadHistInterval(0),
+          (internal_stats == nullptr)
+              ? nullptr
+              : internal_stats->GetUserFileReadHistInterval(0),
+          (internal_stats == nullptr)
+              ? nullptr
+              : internal_stats->GetBackgroundFileReadHistInterval(0),
           TableReaderCaller::kFlush, /*arena=*/nullptr,
           /*skip_filter=*/false, tboptions.level_at_creation,
           MaxFileSizeForL0MetaPin(mutable_cf_options),

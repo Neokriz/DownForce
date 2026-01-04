@@ -30,6 +30,9 @@ DEFINE_SYNC_AND_ASYNC(Status, Version::MultiGetFromSST)
                                               TableReaderCaller::kUserMultiGet),
       cfd_->internal_stats()->GetUserFileReadHist(hit_file_level),
       cfd_->internal_stats()->GetBackgroundFileReadHist(hit_file_level),
+      cfd_->internal_stats()->GetFileReadHistInterval(hit_file_level),
+      cfd_->internal_stats()->GetUserFileReadHistInterval(hit_file_level),
+      cfd_->internal_stats()->GetBackgroundFileReadHistInterval(hit_file_level),
       skip_filters, skip_range_deletions, hit_file_level, table_handle);
   // TODO: examine the behavior for corrupted key
   if (timer_enabled) {

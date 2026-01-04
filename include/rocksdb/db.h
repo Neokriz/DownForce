@@ -1094,6 +1094,21 @@ class DB {
     //      level.
     static const std::string kCFBackgroundFileReadHistogram;
 
+    //  "rocksdb.cf-file-read-histogram-interval" - returns a string
+    //      representation of the interval histogram of file read latency by level
+    //      and then resets it.
+    static const std::string kCFFileHistogramInterval;
+
+    //  "rocksdb.cf-user-file-read-histogram-interval" - returns a string
+    //      representation of the interval histogram of user file read latency
+    //      by level and then resets it.
+    static const std::string kCFUserFileReadHistogramInterval;
+
+    //  "rocksdb.cf-background-file-read-histogram-interval" - returns a string
+    //      representation of the interval histogram of background file read
+    //      latency by level and then resets it.
+    static const std::string kCFBackgroundFileReadHistogramInterval;
+
     // "rocksdb.cf-write-stall-stats" - returns a multi-line string or
     //      map with statistics on CF-scope write stalls for a given CF
     // See`WriteStallStatsMapKeys` for structured representation of keys

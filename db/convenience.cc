@@ -81,7 +81,10 @@ Status VerifySstFileChecksumInternal(const Options& options,
           ioptions.stats /* stats */,
           Histograms::SST_READ_MICROS /* hist_type */,
           nullptr /* file_read_hist */, nullptr /* user_read_hist */,
-          nullptr /* background_read_hist */, ioptions.rate_limiter.get()));
+          nullptr /* background_read_hist */, nullptr /* file_read_hist_int */,
+          nullptr /* user_read_hist_int */,
+          nullptr /* background_read_hist_int */,
+          ioptions.rate_limiter.get()));
   const bool kImmortal = true;
   auto reader_options = TableReaderOptions(
       ioptions, options.prefix_extractor, env_options, internal_comparator,

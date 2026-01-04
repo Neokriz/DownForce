@@ -742,6 +742,12 @@ Status CompactionJob::Run() {
                 compact_->compaction->output_level()),
             cfd->internal_stats()->GetBackgroundFileReadHist(
                 compact_->compaction->output_level()),
+            cfd->internal_stats()->GetFileReadHistInterval(
+                compact_->compaction->output_level()),
+            cfd->internal_stats()->GetUserFileReadHistInterval(
+                compact_->compaction->output_level()),
+            cfd->internal_stats()->GetBackgroundFileReadHistInterval(
+                compact_->compaction->output_level()),
             TableReaderCaller::kCompactionRefill, /*arena=*/nullptr,
             /*skip_filters=*/false, compact_->compaction->output_level(),
             MaxFileSizeForL0MetaPin(

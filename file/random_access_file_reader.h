@@ -87,6 +87,9 @@ class RandomAccessFileReader {
   HistogramImpl* file_read_hist_;
   HistogramImpl* user_read_hist_;
   HistogramImpl* background_read_hist_;
+  HistogramImpl* file_read_hist_int_;
+  HistogramImpl* user_read_hist_int_;
+  HistogramImpl* background_read_hist_int_;
   RateLimiter* rate_limiter_;
   std::vector<std::shared_ptr<EventListener>> listeners_;
   const Temperature file_temperature_;
@@ -129,6 +132,9 @@ class RandomAccessFileReader {
       HistogramImpl* file_read_hist = nullptr,
       HistogramImpl* user_read_hist = nullptr,
       HistogramImpl* background_read_hist = nullptr,
+      HistogramImpl* file_read_hist_int = nullptr,
+      HistogramImpl* user_read_hist_int = nullptr,
+      HistogramImpl* background_read_hist_int = nullptr,
       RateLimiter* rate_limiter = nullptr,
       const std::vector<std::shared_ptr<EventListener>>& listeners = {},
       Temperature file_temperature = Temperature::kUnknown,
@@ -141,6 +147,9 @@ class RandomAccessFileReader {
         file_read_hist_(file_read_hist),
         user_read_hist_(user_read_hist),
         background_read_hist_(background_read_hist),
+        file_read_hist_int_(file_read_hist_int),
+        user_read_hist_int_(user_read_hist_int),
+        background_read_hist_int_(background_read_hist_int),
         rate_limiter_(rate_limiter),
         listeners_(),
         file_temperature_(file_temperature),

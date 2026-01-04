@@ -973,7 +973,9 @@ class LevelIterator final : public InternalIterator {
       const LevelFilesBrief* flevel, const MutableCFOptions& mutable_cf_options,
       bool should_sample, HistogramImpl* file_read_hist,
       HistogramImpl* user_read_hist, HistogramImpl* background_read_hist,
-      TableReaderCaller caller, bool skip_filters, int level, RangeDelAggregator* range_del_agg,
+      HistogramImpl* file_read_hist_int, HistogramImpl* user_read_hist_int,
+      HistogramImpl* background_read_hist_int, TableReaderCaller caller,
+      bool skip_filters, int level, RangeDelAggregator* range_del_agg,
       const std::vector<AtomicCompactionUnitBoundary>* compaction_boundaries =
           nullptr,
       bool allow_unprepared_value = false,
@@ -990,6 +992,9 @@ class LevelIterator final : public InternalIterator {
         file_read_hist_(file_read_hist),
         user_read_hist_(user_read_hist),
         background_read_hist_(background_read_hist),
+        file_read_hist_int_(file_read_hist_int),
+        user_read_hist_int_(user_read_hist_int),
+        background_read_hist_int_(background_read_hist_int),
         caller_(caller),
         file_index_(flevel_->num_files),
         range_del_agg_(range_del_agg),
@@ -1152,8 +1157,9 @@ class LevelIterator final : public InternalIterator {
         read_options_, file_options_, icomparator_, *file_meta.file_metadata,
         range_del_agg_, mutable_cf_options_,
         nullptr /* don't need reference to table */, file_read_hist_,
-        user_read_hist_, background_read_hist_, caller_, /*arena=*/nullptr,
-        skip_filters_, level_,
+        user_read_hist_, background_read_hist_, file_read_hist_int_,
+        user_read_hist_int_, background_read_hist_int_, caller_,
+        /*arena=*/nullptr, skip_filters_, level_,
         /*max_file_size_for_l0_meta_pin=*/0, smallest_compaction_key,
         largest_compaction_key, allow_unprepared_value_, &read_seq_,
         range_tombstone_iter_);
@@ -1186,6 +1192,9 @@ class LevelIterator final : public InternalIterator {
   HistogramImpl* file_read_hist_;
   HistogramImpl* user_read_hist_;
   HistogramImpl* background_read_hist_;
+  HistogramImpl* file_read_hist_int_;
+  HistogramImpl* user_read_hist_int_;
+  HistogramImpl* background_read_hist_int_;
   TableReaderCaller caller_;
   size_t file_index_;
   RangeDelAggregator* range_del_agg_;
@@ -1618,7 +1627,9 @@ Status Version::GetTableProperties(const ReadOptions& read_options,
           ioptions->stats /* stats */,
           Histograms::SST_READ_MICROS /* hist_type */,
           nullptr /* file_read_hist */, nullptr /* user_read_hist */,
-          nullptr /* background_read_hist */, nullptr /* rate_limiter */,
+          nullptr /* background_read_hist */,
+          nullptr /* file_read_hist_int */, nullptr /* user_read_hist_int */,
+          nullptr /* background_read_hist_int */, nullptr /* rate_limiter */,
           ioptions->listeners));
   std::unique_ptr<TableProperties> props;
   s = ReadTableProperties(
@@ -1941,6 +1952,9 @@ InternalIterator* Version::TEST_GetLevelIterator(
                                               TableReaderCaller::kUserIterator),
       cfd_->internal_stats()->GetUserFileReadHist(level),
       cfd_->internal_stats()->GetBackgroundFileReadHist(level),
+      cfd_->internal_stats()->GetFileReadHistInterval(level),
+      cfd_->internal_stats()->GetUserFileReadHistInterval(level),
+      cfd_->internal_stats()->GetBackgroundFileReadHistInterval(level),
       TableReaderCaller::kUserIterator, IsFilterSkipped(level), level,
       nullptr /* range_del_agg */, nullptr /* compaction_boundaries */,
       allow_unprepared_value, &tombstone_iter_ptr);
@@ -2054,6 +2068,12 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
           /*user_read_hist=*/cfd_->internal_stats()->GetUserFileReadHist(0),
           /*background_read_hist=*/
           cfd_->internal_stats()->GetBackgroundFileReadHist(0),
+          /*file_read_hist_int=*/
+          cfd_->internal_stats()->GetFileReadHistInterval(0),
+          /*user_read_hist_int=*/
+          cfd_->internal_stats()->GetUserFileReadHistInterval(0),
+          /*background_read_hist_int=*/
+          cfd_->internal_stats()->GetBackgroundFileReadHistInterval(0),
           /*caller=*/TableReaderCaller::kUserIterator, /*arena=*/arena,
           /*skip_filters=*/false, /*level=*/0, max_file_size_for_l0_meta_pin_,
           /*smallest_compaction_key=*/nullptr,
@@ -2089,6 +2109,9 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
             level, TableReaderCaller::kUserIterator),
         cfd_->internal_stats()->GetUserFileReadHist(level),
         cfd_->internal_stats()->GetBackgroundFileReadHist(level),
+        cfd_->internal_stats()->GetFileReadHistInterval(level),
+        cfd_->internal_stats()->GetUserFileReadHistInterval(level),
+        cfd_->internal_stats()->GetBackgroundFileReadHistInterval(level),
         TableReaderCaller::kUserIterator, IsFilterSkipped(level), level,
         /*range_del_agg=*/nullptr,
         /*compaction_boundaries=*/nullptr, allow_unprepared_value,
@@ -2136,6 +2159,12 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
           /*user_read_hist=*/cfd_->internal_stats()->GetUserFileReadHist(0),
           /*background_read_hist=*/
           cfd_->internal_stats()->GetBackgroundFileReadHist(0),
+          /*file_read_hist_int=*/
+          cfd_->internal_stats()->GetFileReadHistInterval(0),
+          /*user_read_hist_int=*/
+          cfd_->internal_stats()->GetUserFileReadHistInterval(0),
+          /*background_read_hist_int=*/
+          cfd_->internal_stats()->GetBackgroundFileReadHistInterval(0),
           /*caller=*/TableReaderCaller::kUserIterator, /*arena=*/&arena,
           /*skip_filters=*/false, /*level=*/0, max_file_size_for_l0_meta_pin_,
           /*smallest_compaction_key=*/nullptr,
@@ -2157,6 +2186,9 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
             level, TableReaderCaller::kUserIterator),
         cfd_->internal_stats()->GetUserFileReadHist(level),
         cfd_->internal_stats()->GetBackgroundFileReadHist(level),
+        cfd_->internal_stats()->GetFileReadHistInterval(level),
+        cfd_->internal_stats()->GetUserFileReadHistInterval(level),
+        cfd_->internal_stats()->GetBackgroundFileReadHistInterval(level),
         TableReaderCaller::kUserIterator, IsFilterSkipped(level), level,
         &range_del_agg, nullptr, false));
     status = OverlapWithIterator(ucmp, smallest_user_key, largest_user_key,
@@ -2476,6 +2508,11 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                                                 TableReaderCaller::kUserGet),
         cfd_->internal_stats()->GetUserFileReadHist(fp.GetHitFileLevel()),
         cfd_->internal_stats()->GetBackgroundFileReadHist(fp.GetHitFileLevel()),
+        cfd_->internal_stats()->GetFileReadHistInterval(fp.GetHitFileLevel()),
+        cfd_->internal_stats()->GetUserFileReadHistInterval(
+            fp.GetHitFileLevel()),
+        cfd_->internal_stats()->GetBackgroundFileReadHistInterval(
+            fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
                         fp.IsHitFileLastInLevel()),
         fp.GetHitFileLevel(), max_file_size_for_l0_meta_pin_);
@@ -2716,6 +2753,12 @@ void Version::MultiGet(const ReadOptions& read_options, MultiGetRange* range,
                     fp.GetHitFileLevel()),
                 cfd_->internal_stats()->GetBackgroundFileReadHist(
                     fp.GetHitFileLevel()),
+                cfd_->internal_stats()->GetFileReadHistInterval(
+                    fp.GetHitFileLevel()),
+                cfd_->internal_stats()->GetUserFileReadHistInterval(
+                    fp.GetHitFileLevel()),
+                cfd_->internal_stats()->GetBackgroundFileReadHistInterval(
+                    fp.GetHitFileLevel()),
                 fp.GetHitFileLevel(), &file_range, &table_handle);
             skip_range_deletions = true;
             if (status.ok()) {
@@ -2905,6 +2948,11 @@ Status Version::ProcessBatch(
               fp.GetHitFileLevel(), TableReaderCaller::kUserMultiGet),
           cfd_->internal_stats()->GetUserFileReadHist(fp.GetHitFileLevel()),
           cfd_->internal_stats()->GetBackgroundFileReadHist(
+              fp.GetHitFileLevel()),
+          cfd_->internal_stats()->GetFileReadHistInterval(fp.GetHitFileLevel()),
+          cfd_->internal_stats()->GetUserFileReadHistInterval(
+              fp.GetHitFileLevel()),
+          cfd_->internal_stats()->GetBackgroundFileReadHistInterval(
               fp.GetHitFileLevel()),
           fp.GetHitFileLevel(), &file_range, &table_handle);
       if (status.ok()) {
@@ -7148,6 +7196,9 @@ InternalIterator* VersionSet::MakeInputIterator(
               /*file_read_hist=*/nullptr,
               /*user_read_hist=*/nullptr,
               /*background_read_hist=*/nullptr,
+              /*file_read_hist_int=*/nullptr,
+              /*user_read_hist_int=*/nullptr,
+              /*background_read_hist_int=*/nullptr,
               TableReaderCaller::kCompaction,
               /*arena=*/nullptr,
               /*skip_filters=*/false,
@@ -7187,6 +7238,9 @@ InternalIterator* VersionSet::MakeInputIterator(
                /*file_read_hist=*/nullptr,
                /*user_read_hist=*/nullptr,
                /*background_read_hist=*/nullptr,
+               /*file_read_hist_int=*/nullptr,
+               /*user_read_hist_int=*/nullptr,
+               /*background_read_hist_int=*/nullptr,
                TableReaderCaller::kCompaction,
                /*arena=*/nullptr,
                /*skip_filters=*/false,
@@ -7464,7 +7518,10 @@ Status VersionSet::VerifyFileMetadata(const ReadOptions& read_options,
         read_options, file_opts, *icmp, meta_copy, &handle, *cf_opts,
         /*no_io=*/false, internal_stats->GetFileReadHist(level),
         internal_stats->GetUserFileReadHist(level),
-        internal_stats->GetBackgroundFileReadHist(level), false, level,
+        internal_stats->GetBackgroundFileReadHist(level),
+        internal_stats->GetFileReadHistInterval(level),
+        internal_stats->GetUserFileReadHistInterval(level),
+        internal_stats->GetBackgroundFileReadHistInterval(level), false, level,
         /*prefetch_index_and_filter_in_cache*/ false, max_sz_for_l0_meta_pin,
         meta_copy.temperature);
     if (handle) {
