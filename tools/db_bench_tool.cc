@@ -2636,6 +2636,41 @@ class Stats {
               }
             }
           }
+          
+          // Print level stats at interval
+          if (id_ == 0 && (FLAGS_all_read_latency_interval_stats > 0 ||
+            FLAGS_user_read_latency_interval_stats > 0 ||
+            FLAGS_background_read_latency_interval_stats > 0)) {
+            // Note: We check the conditions individually inside to respect their
+            // specific intervals, but if any of them is met, we print level stats.
+            bool should_print_level_stats = false;
+            if (FLAGS_all_read_latency_interval_stats > 0 &&
+            (done_ / FLAGS_stats_interval) %
+                    FLAGS_all_read_latency_interval_stats ==
+                0) {
+            should_print_level_stats = true;
+            }
+            if (FLAGS_user_read_latency_interval_stats > 0 &&
+            (done_ / FLAGS_stats_interval) %
+                    FLAGS_user_read_latency_interval_stats ==
+                0) {
+            should_print_level_stats = true;
+            }
+            if (FLAGS_background_read_latency_interval_stats > 0 &&
+            (done_ / FLAGS_stats_interval) %
+                    FLAGS_background_read_latency_interval_stats ==
+                0) {
+            should_print_level_stats = true;
+            }
+
+            if (should_print_level_stats && db) {
+            std::string level_stats;
+            if (db->GetProperty("rocksdb.levelstats", &level_stats)) {
+            fprintf(stderr, "\n** Level Stats at Interval **\n%s\n",
+                    level_stats.c_str());
+            }
+            }
+          }
 
           // Aggregate local interval histogram to global one
           if (FLAGS_histogram && FLAGS_report_interval_histogram &&
