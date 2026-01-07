@@ -2693,7 +2693,8 @@ class Stats {
             // Check if global time window exceeds 1 second
             uint64_t global_window_micros =
                 now - global_interval_stats.last_global_report_micros;
-            if (global_window_micros >= 1000000) {  // 1 second
+            if (global_window_micros >= 1000000) {  // 1 second              
+              // Print Aggregated Interval Histogram // 
               fprintf(stdout,
                       "\n=== Aggregated Interval Histogram (Time Window: %.6f "
                       "seconds) ===\n",
@@ -2717,14 +2718,15 @@ class Stats {
                         std::stoi(num_l0_compactions_str) -
                         std::stoi(num_l1_compactions_str));
               }
-              for (auto it = global_interval_stats.hist.begin();
-                   it != global_interval_stats.hist.end(); ++it) {
-                fprintf(stdout, "Microseconds per %s:\n%s\n",
-                        OperationTypeString[it->first].c_str(),
-                        it->second->ToString().c_str());
-              }
+              //Print write and read Histogram //
+              // for (auto it = global_interval_stats.hist.begin();
+              //      it != global_interval_stats.hist.end(); ++it) {
+              //   fprintf(stdout, "Microseconds per %s:\n%s\n",
+              //           OperationTypeString[it->first].c_str(),
+              //           it->second->ToString().c_str());
+              // }
               // fprintf(stdout, "=== End of Aggregated Interval Histogram ===\n\n");
-              fflush(stdout);
+              // fflush(stdout);
               global_interval_stats.hist.clear();
               global_interval_stats.last_global_report_micros = now;
             }

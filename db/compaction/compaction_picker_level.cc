@@ -558,7 +558,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   
   //if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
     if(start_level_inputs_.size() + output_level_inputs_.size() <= 1){ 
-      printf("[DEBUG] LevelCompactionBuilder::PickCompaction: start_level_inputs_.size() + output_level_inputs_.size() <= 1\n");
+      //printf("[DEBUG] LevelCompactionBuilder::PickCompaction: start_level_inputs_.size() + output_level_inputs_.size() <= 1\n");
       return nullptr;
     }
   //}
