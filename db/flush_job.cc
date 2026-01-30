@@ -1132,7 +1132,8 @@ Env::IOPriority FlushJob::GetRateLimiterPriority() {
     }
   }
 
-  return Env::IO_HIGH;
+  // return Env::IO_HIGH;
+  return Env::IO_TOTAL; // yhh0107: change to IO_TOTAL to bypass write limiter.
 }
 
 std::unique_ptr<FlushJobInfo> FlushJob::GetFlushJobInfo() const {
