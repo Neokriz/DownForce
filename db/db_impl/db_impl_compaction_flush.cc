@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include <cinttypes>
+#include <cstdio>
 #include <deque>
 
 #include "db/builder.h"
@@ -2937,6 +2938,15 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
 
 DBImpl::BGJobLimits DBImpl::GetBGJobLimits() const {
   mutex_.AssertHeld();
+  /* 
+  bool speedup = write_controller_.NeedSpeedupCompaction();
+  BGJobLimits res = GetBGJobLimits(mutable_db_options_.max_background_flushes,
+                                   mutable_db_options_.max_background_compactions,
+                                   mutable_db_options_.max_background_jobs,
+                                   speedup);
+  printf("[DEBUG] GetBGJobLimits (caller): speedup=%d, final max_compactions=%d\n", speedup, res.max_compactions); // compaction throttling check 1
+  return res;
+  */
   return GetBGJobLimits(mutable_db_options_.max_background_flushes,
                         mutable_db_options_.max_background_compactions,
                         mutable_db_options_.max_background_jobs,
@@ -2960,8 +2970,11 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(int max_background_flushes,
     res.max_compactions = std::max(1, max_background_compactions);
   }
   if (!parallelize_compactions) {
+    // printf("[DEBUG] Throttling: parallelize_compactions=false, res.max_compactions set to 1\n"); // compaction throttling check 2
     // throttle background compactions until we deem necessary
     res.max_compactions = 1;
+  } else {
+    // printf("[DEBUG] Not Throttling: parallelize_compactions=true, res.max_compactions=%d\n", res.max_compactions); // compaction throttling check 3
   }
   return res;
 }
