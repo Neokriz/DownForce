@@ -2700,23 +2700,35 @@ class Stats {
                       "seconds) ===\n",
                       global_window_micros / 1000000.0);
               if (db) {
-                std::string num_compactions_str, num_l0_compactions_str,
-                    num_l1_compactions_str;
-                db->GetProperty("rocksdb.num-running-compactions",
-                                &num_compactions_str);
-                db->GetProperty("rocksdb.num-running-l0-compactions",
-                                &num_l0_compactions_str);
-                db->GetProperty("rocksdb.num-running-l1-compactions",
-                                &num_l1_compactions_str);
+                uint64_t num_jobs = 0;
+                uint64_t num_l0 = 0;
+                uint64_t num_l1 = 0;
+                uint64_t num_total_threads = 0;
+
+                // Use GetIntProperty for safety and performance
+                db->GetIntProperty("rocksdb.num-running-compactions", &num_jobs);
+                db->GetIntProperty("rocksdb.num-running-compactions-including-sub",
+                                &num_total_threads);
+                db->GetIntProperty("rocksdb.num-running-l0-compactions", &num_l0);
+                db->GetIntProperty("rocksdb.num-running-l1-compactions", &num_l1);
+
+                // Some compactions (like manual CompactFiles) might not be counted in num_jobs
+                // but are counted in level-specific counters.
+                uint64_t actual_jobs = std::max(num_jobs, num_l0 + num_l1);
+                
+                // total_threads should be at least actual_jobs
+                uint64_t total_threads = std::max(num_total_threads, actual_jobs);
+                uint64_t num_sub = total_threads - actual_jobs;
+                
+                int64_t num_ld = (int64_t)actual_jobs - (int64_t)num_l0 - (int64_t)num_l1;
+
                 fprintf(
                     stdout,
-                    "Running Total Compactions: %s, Running L0 Compactions: %s, "
-                    "Running L1 Compactions: %s, Running Ld Compactions: %d\n",
-                    num_compactions_str.c_str(), num_l0_compactions_str.c_str(),
-                    num_l1_compactions_str.c_str(),
-                    std::stoi(num_compactions_str) -
-                        std::stoi(num_l0_compactions_str) -
-                        std::stoi(num_l1_compactions_str));
+                    "Running Total Compactions: %" PRIu64 " (Jobs: %" PRIu64 ", Sub: %" PRIu64 "), "
+                    "Running L0 Compactions: %" PRIu64 ", Running L1 Compactions: %" PRIu64 ", "
+                    "Running Ld Compactions: %" PRIu64 "\n",
+                    total_threads, actual_jobs, num_sub, num_l0, num_l1,
+                    (num_ld > 0) ? (uint64_t)num_ld : 0);
               }
               //Print write and read Histogram //
               // for (auto it = global_interval_stats.hist.begin();

@@ -905,6 +905,8 @@ class InternalStats {
   bool HandleCompactionPending(uint64_t* value, DBImpl* db, Version* version);
   bool HandleNumRunningCompactions(uint64_t* value, DBImpl* db,
                                    Version* version);
+  bool HandleNumRunningCompactionsIncludingSub(uint64_t* value, DBImpl* db,
+                                               Version* version);
   bool HandleNumRunningL0Compactions(uint64_t* value, DBImpl* db,
                                     Version* version);
   bool HandleNumRunningL1Compactions(uint64_t* value, DBImpl* db,

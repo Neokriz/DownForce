@@ -1166,6 +1166,10 @@ class DB {
     //      running compactions.
     static const std::string kNumRunningCompactions;
 
+    //  "rocksdb.num-running-compactions-including-sub" - returns the number of
+    //      currently running compactions including subcompactions.
+    static const std::string kNumRunningCompactionsIncludingSub;
+
     //  "rocksdb.num-running-l0-compactions" - returns the number of currently
     //      running L0 compactions.
     static const std::string kNumRunningL0Compactions; 

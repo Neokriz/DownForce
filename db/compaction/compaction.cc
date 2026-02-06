@@ -906,7 +906,7 @@ bool Compaction::ShouldFormSubcompactions() const {
   }
 
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {
-    printf("[DEBUG] Compaction::ShouldFormSubcompactions: start_level_ = %d, output_level_ = %d\n", start_level_, output_level_);
+    //printf("[DEBUG] Compaction::ShouldFormSubcompactions: start_level_ = %d, output_level_ = %d\n", start_level_, output_level_); // byhs
     return (start_level_ == 0 || is_manual_compaction_) && output_level_ > 0;
     //if(start_level_ > 0) return true;
     //else return false;
