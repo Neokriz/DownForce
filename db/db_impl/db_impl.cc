@@ -309,6 +309,24 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
+
+  if (immutable_db_options_.enable_adaptive_io_control &&
+      immutable_db_options_.rate_limiter != nullptr) {
+    adaptive_io_controller_.reset(new AdaptiveIoController(
+        immutable_db_options_.rate_limiter.get(),
+        immutable_db_options_.latency_threshold_us,
+        immutable_db_options_.bpf_map_path));
+    Status s = adaptive_io_controller_->Start();
+    if (!s.ok()) {
+      ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                     "Failed to start AdaptiveIoController: %s",
+                     s.ToString().c_str());
+    } else {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "AdaptiveIoController started with threshold %llu us",
+                     (unsigned long long)immutable_db_options_.latency_threshold_us);
+    }
+  }
 }
 
 Status DBImpl::Resume() {

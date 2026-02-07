@@ -1690,6 +1690,7 @@ fault_injection_test: $(OBJ_DIR)/db/fault_injection_test.o $(TEST_LIBRARY) $(LIB
 	$(AM_LINK)
 
 rate_limiter_test: $(OBJ_DIR)/util/rate_limiter_test.o $(TEST_LIBRARY) $(LIBRARY)
+adaptive_io_controller_test: $(OBJ_DIR)/util/adaptive_io_controller_test.o $(TEST_LIBRARY) $(LIBRARY)
 	$(AM_LINK)
 
 delete_scheduler_test: $(OBJ_DIR)/file/delete_scheduler_test.o $(TEST_LIBRARY) $(LIBRARY)

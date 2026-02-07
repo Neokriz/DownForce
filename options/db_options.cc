@@ -592,6 +592,17 @@ static std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct ImmutableDBOptions, wal_write_temperature),
           OptionType::kTemperature, OptionVerificationType::kNormal,
           OptionTypeFlags::kNone}},
+        {"enable_adaptive_io_control",
+         {offsetof(struct ImmutableDBOptions, enable_adaptive_io_control),
+          OptionType::kBoolean, OptionVerificationType::kNormal,
+          OptionTypeFlags::kNone}},
+        {"bpf_map_path",
+         {offsetof(struct ImmutableDBOptions, bpf_map_path), OptionType::kString,
+          OptionVerificationType::kNormal, OptionTypeFlags::kNone}},
+        {"latency_threshold_us",
+         {offsetof(struct ImmutableDBOptions, latency_threshold_us),
+          OptionType::kUInt64T, OptionVerificationType::kNormal,
+          OptionTypeFlags::kNone}},
 };
 
 const std::string OptionsHelper::kDBOptionsName = "DBOptions";
@@ -798,7 +809,10 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       follower_catchup_retry_count(options.follower_catchup_retry_count),
       follower_catchup_retry_wait_ms(options.follower_catchup_retry_wait_ms),
       metadata_write_temperature(options.metadata_write_temperature),
-      wal_write_temperature(options.wal_write_temperature) {
+      wal_write_temperature(options.wal_write_temperature),
+      enable_adaptive_io_control(options.enable_adaptive_io_control),
+      bpf_map_path(options.bpf_map_path),
+      latency_threshold_us(options.latency_threshold_us) {
   fs = env->GetFileSystem();
   clock = env->GetSystemClock().get();
   logger = info_log.get();
@@ -984,6 +998,12 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    temperature_to_string[metadata_write_temperature].c_str());
   ROCKS_LOG_HEADER(log, "            Options.wal_write_temperature: %s",
                    temperature_to_string[wal_write_temperature].c_str());
+  ROCKS_LOG_HEADER(log, "            Options.enable_adaptive_io_control: %d",
+                   enable_adaptive_io_control);
+  ROCKS_LOG_HEADER(log, "            Options.bpf_map_path: %s",
+                   bpf_map_path.c_str());
+  ROCKS_LOG_HEADER(log, "            Options.latency_threshold_us: %" PRIu64,
+                   latency_threshold_us);
 }
 
 bool ImmutableDBOptions::IsWalDirSameAsDBPath() const {

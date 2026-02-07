@@ -252,6 +252,8 @@ LIB_SOURCES =                                                   \
   util/murmurhash.cc                                            \
   util/random.cc                                                \
   util/rate_limiter.cc                                          \
+  util/adaptive_io_controller.cc                                \
+  util/bpf_latency_reader.cc                                    \
   util/ribbon_config.cc                                         \
   util/slice.cc                                                 \
   util/file_checksum_helper.cc                                  \
@@ -614,6 +616,7 @@ TEST_MAIN_SOURCES =                                                     \
   util/heap_test.cc                                                     \
   util/random_test.cc                                                   \
   util/rate_limiter_test.cc                                             \
+  util/adaptive_io_controller_test.cc                                   \
   util/repeatable_thread_test.cc                                        \
   util/ribbon_test.cc                                                   \
   util/slice_test.cc                                                    \
