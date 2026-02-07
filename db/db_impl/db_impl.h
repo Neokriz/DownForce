@@ -47,6 +47,7 @@
 #include "db/wal_manager.h"
 #include "db/write_controller.h"
 #include "db/write_thread.h"
+#include "util/adaptive_io_controller.h"
 #include "logging/event_logger.h"
 #include "memtable/wbwi_memtable.h"
 #include "monitoring/instrumented_mutex.h"
@@ -2796,6 +2797,7 @@ class DBImpl : public DB {
   WriteThread nonmem_write_thread_;
 
   WriteController write_controller_;
+  std::unique_ptr<AdaptiveIoController> adaptive_io_controller_;
 
   // Size of the last batch group. In slowdown mode, next write needs to
   // sleep if it uses up the quota.

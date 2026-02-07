@@ -1559,6 +1559,15 @@ DEFINE_bool(rate_limiter_auto_tuned, false,
 DEFINE_int64(rate_limiter_single_burst_bytes, 0,
              "Set single burst bytes on background I/O rate limiter.");
 
+DEFINE_bool(enable_adaptive_io_control, false,
+            "Enable adaptive I/O control based on eBPF measurements.");
+
+DEFINE_string(bpf_map_path, "/sys/fs/bpf/rocksdb_io_lat/hist_dev_r_us",
+              "Path to the pinned eBPF map for read latency histogram.");
+
+DEFINE_uint64(latency_threshold_us, 10000,
+              "Latency threshold in microseconds for adaptive I/O control.");
+
 DEFINE_bool(sine_write_rate, false, "Use a sine wave write_rate_limit");
 
 DEFINE_uint64(
@@ -4655,6 +4664,9 @@ class Benchmark {
     options.uncache_aggressiveness = FLAGS_uncache_aggressiveness;
     options.in_memory_merge = FLAGS_in_memory_merge;
     options.disable_intra_l0_compaction = FLAGS_disable_intra_l0_compaction;
+    options.enable_adaptive_io_control = FLAGS_enable_adaptive_io_control;
+    options.bpf_map_path = FLAGS_bpf_map_path;
+    options.latency_threshold_us = FLAGS_latency_threshold_us;
     options.l0_size_based_stop = FLAGS_l0_size_based_stop;
     options.downforce_max_parallel_compactions = FLAGS_downforce_max_parallel_compactions;
 
@@ -5177,6 +5189,10 @@ class Benchmark {
             FLAGS_rate_limiter_single_burst_bytes));
       }
     }
+
+    options.enable_adaptive_io_control = FLAGS_enable_adaptive_io_control;
+    options.bpf_map_path = FLAGS_bpf_map_path;
+    options.latency_threshold_us = FLAGS_latency_threshold_us;
 
     options.listeners.emplace_back(listener_);
 

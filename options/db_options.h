@@ -108,6 +108,10 @@ struct ImmutableDBOptions {
   Temperature metadata_write_temperature;
   Temperature wal_write_temperature;
 
+  bool enable_adaptive_io_control;
+  std::string bpf_map_path;
+  uint64_t latency_threshold_us;
+
   // Beginning convenience/helper objects that are not part of the base
   // DBOptions
   std::shared_ptr<FileSystem> fs;

@@ -683,6 +683,20 @@ struct DBOptions {
   // Default: nullptr
   std::shared_ptr<RateLimiter> rate_limiter = nullptr;
 
+  // If true, enable adaptive I/O control based on eBPF measurements.
+  // This will adjust the rate_limiter's bytes_per_second dynamically.
+  // Default: false
+  bool enable_adaptive_io_control = false;
+
+  // Path to the pinned eBPF map for read latency histogram.
+  // Default: "/sys/fs/bpf/rocksdb_io_lat/hist_dev_r_us"
+  std::string bpf_map_path = "/sys/fs/bpf/rocksdb_io_lat/hist_dev_r_us";
+
+  // Latency threshold in microseconds. If P99 latency exceeds this,
+  // background I/O rate will be reduced.
+  // Default: 10000 (10ms)
+  uint64_t latency_threshold_us = 10000;
+
   // Use to track SST files and control their file deletion rate.
   //
   // Features:
