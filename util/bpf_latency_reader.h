@@ -23,6 +23,9 @@ class BpfLatencyReader {
   // Read the histogram and calculate P99 latency in microseconds
   Status GetP99Latency(uint64_t* p99_us);
 
+  // Clear the histogram data in BPF map
+  Status ClearHistogram();
+
  private:
   int map_fd_;
   int ncpu_;
