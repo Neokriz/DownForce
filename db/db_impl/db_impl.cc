@@ -310,6 +310,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
     wbm_stall_.reset(new WBMStallInterface());
   }
 
+  // Debug log for AdaptiveIO initialization
+  fprintf(stdout, "[AdaptiveIO] DBImpl init: enable_adaptive=%d, rate_limiter=%p\n",
+          immutable_db_options_.enable_adaptive_io_control,
+          immutable_db_options_.rate_limiter.get());
+  fflush(stdout);
+
   if (immutable_db_options_.enable_adaptive_io_control &&
       immutable_db_options_.rate_limiter != nullptr) {
     adaptive_io_controller_.reset(new AdaptiveIoController(

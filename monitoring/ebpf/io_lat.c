@@ -265,15 +265,17 @@ int main(int argc, char** argv) {
 
   // Pin maps for RocksDB access
   const char* pin_dir = "/sys/fs/bpf/rocksdb_io_lat";
-  mkdir(pin_dir, 0777); // Create directory if not exists
+  mkdir(pin_dir, 0777); 
+  chmod(pin_dir, 0777); // Ensure directory is accessible
 
   char pin_path[256];
   snprintf(pin_path, sizeof(pin_path), "%s/hist_dev_r_us", pin_dir);
-  unlink(pin_path); // Remove existing pin to avoid EEXIST
+  unlink(pin_path);
   if (bpf_map__pin(skel->maps.hist_dev_r_us, pin_path) != 0) {
     fprintf(stderr, "Failed to pin hist_dev_r_us to %s: %s\n", pin_path, strerror(errno));
   } else {
-    printf("Pinned hist_dev_r_us to %s\n", pin_path);
+    chmod(pin_path, 0666); // Allow anyone to read/write this map
+    printf("Pinned hist_dev_r_us to %s (perm: 0666)\n", pin_path);
   }
 
   snprintf(pin_path, sizeof(pin_path), "%s/hist_dev_w_us", pin_dir);
@@ -281,7 +283,8 @@ int main(int argc, char** argv) {
   if (bpf_map__pin(skel->maps.hist_dev_w_us, pin_path) != 0) {
     fprintf(stderr, "Failed to pin hist_dev_w_us to %s: %s\n", pin_path, strerror(errno));
   } else {
-    printf("Pinned hist_dev_w_us to %s\n", pin_path);
+    chmod(pin_path, 0666);
+    printf("Pinned hist_dev_w_us to %s (perm: 0666)\n", pin_path);
   }
 
   skel->links.tp_insert = bpf_program__attach(skel->progs.tp_insert);
