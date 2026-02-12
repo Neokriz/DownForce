@@ -300,6 +300,8 @@ int main(int argc, char** argv) {
   int fd_wait_w = bpf_map__fd(skel->maps.hist_wait_w_us);
   int fd_dev_r = bpf_map__fd(skel->maps.hist_dev_r_us);
   int fd_dev_w = bpf_map__fd(skel->maps.hist_dev_w_us);
+  int fd_dev_r_mon = bpf_map__fd(skel->maps.hist_dev_r_us_mon);
+  int fd_dev_w_mon = bpf_map__fd(skel->maps.hist_dev_w_us_mon);
   int fd_hits = bpf_map__fd(skel->maps.prog_hits);
   int fd_inflight = bpf_map__fd(skel->maps.inflight_cnt);
   int fd_wait_r_sum = bpf_map__fd(skel->maps.lat_wait_r_sum);
@@ -313,13 +315,13 @@ int main(int argc, char** argv) {
          no_clear ? "cumulative" : "per-interval");
   printf("Metrics: [p50 p95 p99 p99.9] in microseconds\n");
 
-  if (!no_clear) {
-    clear_hist(fd_total_r, ncpu);
-    clear_hist(fd_total_w, ncpu);
-    clear_hist(fd_wait_r, ncpu);
-    clear_hist(fd_wait_w, ncpu);
-    clear_hist(fd_dev_r, ncpu);
-    clear_hist(fd_dev_w, ncpu);
+    if (!no_clear) {
+      clear_hist(fd_total_r, ncpu);
+      clear_hist(fd_total_w, ncpu);
+      clear_hist(fd_wait_r, ncpu);
+      clear_hist(fd_wait_w, ncpu);
+      clear_hist(fd_dev_r_mon, ncpu);
+      clear_hist(fd_dev_w_mon, ncpu);
   }
 
   while (1) {
@@ -327,8 +329,8 @@ int main(int argc, char** argv) {
 
     uint64_t tr_cnt = hist_total_count(fd_total_r, ncpu);
     uint64_t tw_cnt = hist_total_count(fd_total_w, ncpu);
-    uint64_t dr_cnt = hist_total_count(fd_dev_r, ncpu);
-    uint64_t dw_cnt = hist_total_count(fd_dev_w, ncpu);
+    uint64_t dr_cnt = hist_total_count(fd_dev_r_mon, ncpu);
+    uint64_t dw_cnt = hist_total_count(fd_dev_w_mon, ncpu);
     
     __u64 h0 = 0, h1 = 0, h2 = 0, h3 = 0, inflight = 0;
     __u64 wr_sum = 0, ww_sum = 0, dr_sum = 0, dw_sum = 0;
@@ -359,10 +361,10 @@ int main(int argc, char** argv) {
       percentile_bucket_idx(fd_wait_r, ncpu, 0.99, &w99);
       percentile_bucket_idx(fd_wait_r, ncpu, 0.999, &w999);
 
-      percentile_bucket_idx(fd_dev_r, ncpu, 0.50, &d50);
-      percentile_bucket_idx(fd_dev_r, ncpu, 0.95, &d95);
-      percentile_bucket_idx(fd_dev_r, ncpu, 0.99, &d99);
-      percentile_bucket_idx(fd_dev_r, ncpu, 0.999, &d999);
+      percentile_bucket_idx(fd_dev_r_mon, ncpu, 0.50, &d50);
+      percentile_bucket_idx(fd_dev_r_mon, ncpu, 0.95, &d95);
+      percentile_bucket_idx(fd_dev_r_mon, ncpu, 0.99, &d99);
+      percentile_bucket_idx(fd_dev_r_mon, ncpu, 0.999, &d999);
 
       printf("%-6s (cnt=%-8llu): wait [avg=%8.1f] ", "READ", (unsigned long long)dr_cnt, w_avg);
       if (hist_total_count(fd_wait_r, ncpu) > 0)
@@ -387,10 +389,10 @@ int main(int argc, char** argv) {
       percentile_bucket_idx(fd_wait_w, ncpu, 0.99, &w99);
       percentile_bucket_idx(fd_wait_w, ncpu, 0.999, &w999);
 
-      percentile_bucket_idx(fd_dev_w, ncpu, 0.50, &d50);
-      percentile_bucket_idx(fd_dev_w, ncpu, 0.95, &d95);
-      percentile_bucket_idx(fd_dev_w, ncpu, 0.99, &d99);
-      percentile_bucket_idx(fd_dev_w, ncpu, 0.999, &d999);
+      percentile_bucket_idx(fd_dev_w_mon, ncpu, 0.50, &d50);
+      percentile_bucket_idx(fd_dev_w_mon, ncpu, 0.95, &d95);
+      percentile_bucket_idx(fd_dev_w_mon, ncpu, 0.99, &d99);
+      percentile_bucket_idx(fd_dev_w_mon, ncpu, 0.999, &d999);
 
       printf("%-6s (cnt=%-8llu): wait [avg=%8.1f] ", "WRITE", (unsigned long long)dw_cnt, w_avg);
       if (hist_total_count(fd_wait_w, ncpu) > 0)
@@ -408,8 +410,8 @@ int main(int argc, char** argv) {
       clear_hist(fd_total_w, ncpu);
       clear_hist(fd_wait_r, ncpu);
       clear_hist(fd_wait_w, ncpu);
-      clear_hist(fd_dev_r, ncpu);
-      clear_hist(fd_dev_w, ncpu);
+      clear_hist(fd_dev_r_mon, ncpu);
+      clear_hist(fd_dev_w_mon, ncpu);
 
       __u64* zeros = calloc(ncpu, sizeof(__u64));
       __u32 k0 = 0;

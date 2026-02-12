@@ -57,7 +57,9 @@ struct {
   hist_wait_r_us SEC(".maps"),   // 소프트웨어 큐 대기 시간
   hist_wait_w_us SEC(".maps"),
   hist_dev_r_us SEC(".maps"),    // 장치 처리 시간 (SQ 포함)
-  hist_dev_w_us SEC(".maps");
+  hist_dev_w_us SEC(".maps"),
+  hist_dev_r_us_mon SEC(".maps"), // 모니터링 전용
+  hist_dev_w_us_mon SEC(".maps"); // 모니터링 전용
 
 // 실시간 inflight 카운트 (장치 내에 머무는 요청 수) - 글로벌 ARRAY로 변경
 struct {
@@ -284,9 +286,11 @@ int BPF_PROG(tp_complete, struct request *rq, int error, unsigned int nr_bytes)
         __u64 d_us = (now - t->issue_ns) / 1000;
         if (t->is_write) {
             hist_inc(&hist_dev_w_us, d_us);
+            hist_inc(&hist_dev_w_us_mon, d_us);
             sum_inc(&lat_dev_w_sum, d_us);
         } else {
             hist_inc(&hist_dev_r_us, d_us);
+            hist_inc(&hist_dev_r_us_mon, d_us);
             sum_inc(&lat_dev_r_sum, d_us);
         }
     }
