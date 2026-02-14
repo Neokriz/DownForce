@@ -111,6 +111,7 @@ struct ImmutableDBOptions {
   bool enable_adaptive_io_control;
   std::string bpf_map_path;
   uint64_t latency_threshold_us;
+  bool rate_limit_bypass_l0_compaction;
 
   // Beginning convenience/helper objects that are not part of the base
   // DBOptions

@@ -1568,6 +1568,10 @@ DEFINE_string(bpf_map_path, "/sys/fs/bpf/rocksdb_io_lat/hist_dev_r_us",
 DEFINE_uint64(latency_threshold_us, 10000,
               "Latency threshold in microseconds for adaptive I/O control.");
 
+DEFINE_bool(rate_limit_bypass_l0_compaction, false,
+            "If true, L0-originated compactions bypass the rate limiter (same "
+            "as Flush). Default: false (original RocksDB behavior).");
+
 DEFINE_bool(sine_write_rate, false, "Use a sine wave write_rate_limit");
 
 DEFINE_uint64(
@@ -4667,6 +4671,7 @@ class Benchmark {
     options.enable_adaptive_io_control = FLAGS_enable_adaptive_io_control;
     options.bpf_map_path = FLAGS_bpf_map_path;
     options.latency_threshold_us = FLAGS_latency_threshold_us;
+    options.rate_limit_bypass_l0_compaction = FLAGS_rate_limit_bypass_l0_compaction;
     options.l0_size_based_stop = FLAGS_l0_size_based_stop;
     options.downforce_max_parallel_compactions = FLAGS_downforce_max_parallel_compactions;
 
@@ -5193,6 +5198,7 @@ class Benchmark {
     options.enable_adaptive_io_control = FLAGS_enable_adaptive_io_control;
     options.bpf_map_path = FLAGS_bpf_map_path;
     options.latency_threshold_us = FLAGS_latency_threshold_us;
+    options.rate_limit_bypass_l0_compaction = FLAGS_rate_limit_bypass_l0_compaction;
 
     options.listeners.emplace_back(listener_);
 

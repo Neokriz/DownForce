@@ -603,6 +603,10 @@ static std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct ImmutableDBOptions, latency_threshold_us),
           OptionType::kUInt64T, OptionVerificationType::kNormal,
           OptionTypeFlags::kNone}},
+        {"rate_limit_bypass_l0_compaction",
+         {offsetof(struct ImmutableDBOptions, rate_limit_bypass_l0_compaction),
+          OptionType::kBoolean, OptionVerificationType::kNormal,
+          OptionTypeFlags::kNone}},
 };
 
 const std::string OptionsHelper::kDBOptionsName = "DBOptions";
@@ -812,7 +816,8 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       wal_write_temperature(options.wal_write_temperature),
       enable_adaptive_io_control(options.enable_adaptive_io_control),
       bpf_map_path(options.bpf_map_path),
-      latency_threshold_us(options.latency_threshold_us) {
+      latency_threshold_us(options.latency_threshold_us),
+      rate_limit_bypass_l0_compaction(options.rate_limit_bypass_l0_compaction) {
   fs = env->GetFileSystem();
   clock = env->GetSystemClock().get();
   logger = info_log.get();
@@ -1004,6 +1009,8 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    bpf_map_path.c_str());
   ROCKS_LOG_HEADER(log, "            Options.latency_threshold_us: %" PRIu64,
                    latency_threshold_us);
+  ROCKS_LOG_HEADER(log, "            Options.rate_limit_bypass_l0_compaction: %d",
+                   rate_limit_bypass_l0_compaction);
 }
 
 bool ImmutableDBOptions::IsWalDirSameAsDBPath() const {

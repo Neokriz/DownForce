@@ -697,6 +697,12 @@ struct DBOptions {
   // Default: 10000 (10ms)
   uint64_t latency_threshold_us = 10000;
 
+  // If true, compactions that start from L0 (L0->L1 or L0->base) do not go
+  // through the rate limiter (same as Flush). Other compactions are still
+  // rate-limited.
+  // Default: false (original RocksDB behavior: all compactions are rate-limited)
+  bool rate_limit_bypass_l0_compaction = false;
+
   // Use to track SST files and control their file deletion rate.
   //
   // Features:
