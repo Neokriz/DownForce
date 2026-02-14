@@ -298,8 +298,8 @@ int main(int argc, char** argv) {
   int fd_total_w = bpf_map__fd(skel->maps.hist_total_w_us);
   int fd_wait_r = bpf_map__fd(skel->maps.hist_wait_r_us);
   int fd_wait_w = bpf_map__fd(skel->maps.hist_wait_w_us);
-  int fd_dev_r = bpf_map__fd(skel->maps.hist_dev_r_us);
-  int fd_dev_w = bpf_map__fd(skel->maps.hist_dev_w_us);
+  [[maybe_unused]] int fd_dev_r = bpf_map__fd(skel->maps.hist_dev_r_us);
+  [[maybe_unused]] int fd_dev_w = bpf_map__fd(skel->maps.hist_dev_w_us);
   int fd_dev_r_mon = bpf_map__fd(skel->maps.hist_dev_r_us_mon);
   int fd_dev_w_mon = bpf_map__fd(skel->maps.hist_dev_w_us_mon);
   int fd_hits = bpf_map__fd(skel->maps.prog_hits);
