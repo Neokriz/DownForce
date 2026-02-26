@@ -37,7 +37,7 @@ class AdaptiveIoController {
   int64_t current_rate_bps_;
   int64_t max_rate_bps_;
   static const int64_t kMinRateBps = 1 * 1024 * 1024; // 1MB/s
-  static const int64_t kAdditiveIncreaseBps = 10 * 1024 * 1024; // 10MB/s
+  static const int64_t kAdditiveIncreaseBps = 1 * 1024 * 1024; // 1MB/s every 0.1s -> 10MB/s every 1s
 };
 
 }  // namespace ROCKSDB_NAMESPACE
