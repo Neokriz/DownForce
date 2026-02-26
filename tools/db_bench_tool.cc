@@ -1586,6 +1586,15 @@ DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
 DEFINE_double(sine_d, 1, "D in f(x) = A sin(bx + c) + d");
 
+DEFINE_uint64(
+    rate_step_sec, 0,
+    "Time in seconds after benchmark start to apply the rate step. 0 to "
+    "disable.");
+DEFINE_uint64(
+    rate_step_new_rate, 0,
+    "New rate in bytes/second to apply at rate_step_sec. Applies to both "
+    "options.rate_limiter and benchmark_write_rate_limit if they are enabled.");
+
 DEFINE_bool(rate_limit_bg_reads, false,
             "Use options.rate_limiter on compaction reads");
 
@@ -4301,6 +4310,57 @@ class Benchmark {
     void (Benchmark::*method)(ThreadState*);
   };
 
+  struct RateStepArg {
+    Benchmark* bm;
+    SharedState* shared;
+  };
+
+  static void RateStepThreadBody(void* v) {
+    RateStepArg* arg = static_cast<RateStepArg*>(v);
+    SharedState* shared = arg->shared;
+    Benchmark* bm = arg->bm;
+
+    // Sleep for rate_step_sec in chunks to allow early exit
+    if (FLAGS_rate_step_sec > 0) {
+      uint64_t elapsed_us = 0;
+      uint64_t target_us =
+          static_cast<uint64_t>(FLAGS_rate_step_sec) * 1000000;
+      uint64_t sleep_chunk_us = 100000;  // 100ms
+      while (elapsed_us < target_us) {
+        // Check if benchmark finished
+        {
+          MutexLock l(&shared->mu);
+          if (shared->num_done >= shared->total) {
+            return;
+          }
+        }
+
+        uint64_t next_sleep = std::min(sleep_chunk_us, target_us - elapsed_us);
+        FLAGS_env->SleepForMicroseconds(static_cast<int>(next_sleep));
+        elapsed_us += next_sleep;
+      }
+    }
+
+    // Apply new rate to options.rate_limiter
+    if (bm->open_options_.rate_limiter) {
+      bm->open_options_.rate_limiter->SetBytesPerSecond(
+          FLAGS_rate_step_new_rate);
+      fprintf(stdout,
+              "Rate step applied to options.rate_limiter: %" PRIu64
+              " bytes/sec\n",
+              FLAGS_rate_step_new_rate);
+    }
+
+    // Apply new rate to benchmark_write_rate_limit
+    if (shared->write_rate_limiter) {
+      shared->write_rate_limiter->SetBytesPerSecond(FLAGS_rate_step_new_rate);
+      fprintf(stdout,
+              "Rate step applied to benchmark_write_rate_limit: %" PRIu64
+              " bytes/sec\n",
+              FLAGS_rate_step_new_rate);
+    }
+  }
+
   static void ThreadBody(void* v) {
     ThreadArg* arg = static_cast<ThreadArg*>(v);
     SharedState* shared = arg->shared;
@@ -4350,6 +4410,13 @@ class Benchmark {
       shared.read_rate_limiter.reset(NewGenericRateLimiter(
           FLAGS_benchmark_read_rate_limit, 100000 /* refill_period_us */,
           10 /* fairness */, RateLimiter::Mode::kReadsOnly));
+    }
+
+    RateStepArg rate_step_arg = {this, &shared};
+    std::unique_ptr<port::Thread> rate_step_thread;
+    if (FLAGS_rate_step_sec > 0) {
+      rate_step_thread.reset(
+          new port::Thread(RateStepThreadBody, &rate_step_arg));
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
@@ -4411,6 +4478,10 @@ class Benchmark {
       delete arg[i].thread;
     }
     delete[] arg;
+
+    if (rate_step_thread) {
+      rate_step_thread->join();
+    }
 
     return merge_stats;
   }
