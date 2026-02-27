@@ -861,7 +861,9 @@ class VersionBuilder::Rep {
       if (level >= num_levels_) {
         has_invalid_levels_ = true;
       }
-
+      if(ioptions_->compaction_style == kCompactionStyleUniversal){
+        return Status::OK();
+      }
       std::ostringstream oss;
       oss << "Cannot delete table file #" << file_number << " from level "
           << level << " since it is ";

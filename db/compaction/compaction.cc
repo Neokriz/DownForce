@@ -348,7 +348,12 @@ Compaction::Compaction(
               : EvaluatePenultimateLevel(vstorage, mutable_cf_options_,
                                          immutable_options_, start_level_,
                                          output_level_)) {
-  MarkFilesBeingCompacted(true);
+  // printf("[DEBUG] Compaction::Compaction: cfd_->ioptions()->compaction_style != kCompactionStyleUniversal\n");
+  if(immutable_options_.compaction_style != kCompactionStyleUniversal) {
+    // printf("[DEBUG] Compaction::Compaction: MarkFilesBeingCompacted(true)\n");
+    MarkFilesBeingCompacted(true);
+  }
+  
   if (is_manual_compaction_) {
     compaction_reason_ = CompactionReason::kManualCompaction;
   }

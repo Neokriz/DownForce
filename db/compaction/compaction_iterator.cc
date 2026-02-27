@@ -39,7 +39,8 @@ CompactionIterator::CompactionIterator(
     const std::shared_ptr<Logger> info_log,
     const std::string* full_history_ts_low,
     const SequenceNumber preserve_time_min_seqno,
-    const SequenceNumber preclude_last_level_min_seqno)
+    const SequenceNumber preclude_last_level_min_seqno,
+    bool preserve_seqno)
     : CompactionIterator(
           input, cmp, merge_helper, last_sequence, snapshots, earliest_snapshot,
           earliest_write_conflict_snapshot, job_snapshot, snapshot_checker, env,
@@ -50,7 +51,7 @@ CompactionIterator::CompactionIterator(
               compaction ? new RealCompaction(compaction) : nullptr),
           must_count_input_entries, compaction_filter, shutting_down, info_log,
           full_history_ts_low, preserve_time_min_seqno,
-          preclude_last_level_min_seqno) {}
+          preclude_last_level_min_seqno, preserve_seqno) {}
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
@@ -69,7 +70,8 @@ CompactionIterator::CompactionIterator(
     const std::shared_ptr<Logger> info_log,
     const std::string* full_history_ts_low,
     const SequenceNumber preserve_time_min_seqno,
-    const SequenceNumber preclude_last_level_min_seqno)
+    const SequenceNumber preclude_last_level_min_seqno,
+    bool preserve_seqno)
     : input_(input, cmp, must_count_input_entries),
       cmp_(cmp),
       merge_helper_(merge_helper),
@@ -111,7 +113,8 @@ CompactionIterator::CompactionIterator(
       cmp_with_history_ts_low_(0),
       level_(compaction_ == nullptr ? 0 : compaction_->level()),
       preserve_time_min_seqno_(preserve_time_min_seqno),
-      preclude_last_level_min_seqno_(preclude_last_level_min_seqno) {
+      preclude_last_level_min_seqno_(preclude_last_level_min_seqno),
+      preserve_seqno_(preserve_seqno) {
   assert(snapshots_ != nullptr);
   assert(preserve_time_min_seqno_ <= preclude_last_level_min_seqno_);
 
@@ -1352,45 +1355,97 @@ void CompactionIterator::PrepareOutput() {
     //
     // Can we do the same for levels above bottom level as long as
     // KeyNotExistsBeyondOutputLevel() return true?
-    if (Valid() && compaction_ != nullptr &&
-        !compaction_->allow_ingest_behind() && bottommost_level_ &&
-        DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
-        ikey_.type != kTypeMerge && current_key_committed_ &&
-        !output_to_penultimate_level_ &&
-        ikey_.sequence < preserve_time_min_seqno_ && !is_range_del_) {
-      if (ikey_.type == kTypeDeletion ||
-          (ikey_.type == kTypeSingleDeletion && timestamp_size_ == 0)) {
-        ROCKS_LOG_FATAL(
-            info_log_,
-            "Unexpected key %s for seq-zero optimization. "
-            "earliest_snapshot %" PRIu64
-            ", earliest_write_conflict_snapshot %" PRIu64
-            " job_snapshot %" PRIu64
-            ". timestamp_size: %d full_history_ts_low_ %s. validity %x",
-            ikey_.DebugString(allow_data_in_errors_, true).c_str(),
-            earliest_snapshot_, earliest_write_conflict_snapshot_,
-            job_snapshot_, static_cast<int>(timestamp_size_),
-            full_history_ts_low_ != nullptr
-                ? Slice(*full_history_ts_low_).ToString(true).c_str()
-                : "null",
-            validity_info_.rep);
-        assert(false);
+    // printf("[DEBUG] Before PrepareOutput: c->immutable_options()->compaction_style == kCompactionStyleUniversal\n");
+    
+    //const Compaction* c = compaction_->real_compaction();
+    const Compaction* c = compaction_ ? compaction_->real_compaction() : nullptr;
+    if(c != nullptr && c->immutable_options()->compaction_style == kCompactionStyleUniversal){
+      if (Valid() && compaction_ != nullptr &&
+      !compaction_->allow_ingest_behind() &&
+      DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
+      ikey_.type != kTypeMerge && current_key_committed_ &&
+      !output_to_penultimate_level_ &&
+      ikey_.sequence < preserve_time_min_seqno_ && !is_range_del_) {
+        if (ikey_.type == kTypeDeletion ||
+            (ikey_.type == kTypeSingleDeletion && timestamp_size_ == 0)) {
+          ROCKS_LOG_FATAL(
+              info_log_,
+              "Unexpected key %s for seq-zero optimization. "
+              "earliest_snapshot %" PRIu64
+              ", earliest_write_conflict_snapshot %" PRIu64
+              " job_snapshot %" PRIu64
+              ". timestamp_size: %d full_history_ts_low_ %s. validity %x",
+              ikey_.DebugString(allow_data_in_errors_, true).c_str(),
+              earliest_snapshot_, earliest_write_conflict_snapshot_,
+              job_snapshot_, static_cast<int>(timestamp_size_),
+              full_history_ts_low_ != nullptr
+                  ? Slice(*full_history_ts_low_).ToString(true).c_str()
+                  : "null",
+              validity_info_.rep);
+          assert(false);
+        }
+        if(!preserve_seqno_){  // Check if the sequence number should be preserved
+          ikey_.sequence = 0;
+          last_key_seq_zeroed_ = true;
+          TEST_SYNC_POINT_CALLBACK("CompactionIterator::PrepareOutput:ZeroingSeq",
+                                  &ikey_);
+        }
+        if (!timestamp_size_) {
+          current_key_.UpdateInternalKey(0, ikey_.type);
+        } else if (full_history_ts_low_ && cmp_with_history_ts_low_ < 0) {
+          // We can also zero out timestamp for better compression.
+          // For the same user key (excluding timestamp), the timestamp-based
+          // history can be collapsed to save some space if the timestamp is
+          // older than *full_history_ts_low_.
+          const std::string kTsMin(timestamp_size_, static_cast<char>(0));
+          const Slice ts_slice = kTsMin;
+          ikey_.SetTimestamp(ts_slice);
+          current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type, &ts_slice);
+        }
       }
-      ikey_.sequence = 0;
-      last_key_seq_zeroed_ = true;
-      TEST_SYNC_POINT_CALLBACK("CompactionIterator::PrepareOutput:ZeroingSeq",
-                               &ikey_);
-      if (!timestamp_size_) {
-        current_key_.UpdateInternalKey(0, ikey_.type);
-      } else if (full_history_ts_low_ && cmp_with_history_ts_low_ < 0) {
-        // We can also zero out timestamp for better compression.
-        // For the same user key (excluding timestamp), the timestamp-based
-        // history can be collapsed to save some space if the timestamp is
-        // older than *full_history_ts_low_.
-        const std::string kTsMin(timestamp_size_, static_cast<char>(0));
-        const Slice ts_slice = kTsMin;
-        ikey_.SetTimestamp(ts_slice);
-        current_key_.UpdateInternalKey(0, ikey_.type, &ts_slice);
+    }
+    else{
+      // printf("[DEBUG] PrepareOutput: c->immutable_options()->compaction_style == kCompactionStyleLeveledl\n");
+      if (Valid() && compaction_ != nullptr &&
+      !compaction_->allow_ingest_behind() && bottommost_level_ &&
+      DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
+      ikey_.type != kTypeMerge && current_key_committed_ &&
+      !output_to_penultimate_level_ &&
+      ikey_.sequence < preserve_time_min_seqno_ && !is_range_del_) {
+        if (ikey_.type == kTypeDeletion ||
+            (ikey_.type == kTypeSingleDeletion && timestamp_size_ == 0)) {
+          ROCKS_LOG_FATAL(
+              info_log_,
+              "Unexpected key %s for seq-zero optimization. "
+              "earliest_snapshot %" PRIu64
+              ", earliest_write_conflict_snapshot %" PRIu64
+              " job_snapshot %" PRIu64
+              ". timestamp_size: %d full_history_ts_low_ %s. validity %x",
+              ikey_.DebugString(allow_data_in_errors_, true).c_str(),
+              earliest_snapshot_, earliest_write_conflict_snapshot_,
+              job_snapshot_, static_cast<int>(timestamp_size_),
+              full_history_ts_low_ != nullptr
+                  ? Slice(*full_history_ts_low_).ToString(true).c_str()
+                  : "null",
+              validity_info_.rep);
+          assert(false);
+        }
+        ikey_.sequence = 0;
+        last_key_seq_zeroed_ = true;
+        TEST_SYNC_POINT_CALLBACK("CompactionIterator::PrepareOutput:ZeroingSeq",
+                                &ikey_);
+        if (!timestamp_size_) {
+          current_key_.UpdateInternalKey(0, ikey_.type);
+        } else if (full_history_ts_low_ && cmp_with_history_ts_low_ < 0) {
+          // We can also zero out timestamp for better compression.
+          // For the same user key (excluding timestamp), the timestamp-based
+          // history can be collapsed to save some space if the timestamp is
+          // older than *full_history_ts_low_.
+          const std::string kTsMin(timestamp_size_, static_cast<char>(0));
+          const Slice ts_slice = kTsMin;
+          ikey_.SetTimestamp(ts_slice);
+          current_key_.UpdateInternalKey(0, ikey_.type, &ts_slice);
+        }
       }
     }
   }
