@@ -1559,6 +1559,12 @@ Status DBImpl::CompactFilesImpl(
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
 
+  // yhh0316: dynamic IO priority for L1+ compaction
+  if (c->start_level() >= 1) {
+    versions_->RegisterRunningL1PlusCompaction(
+        job_context->job_id, c->score(), c->start_level());
+  }
+  // yhh0316: addition ends here
   compaction_job.Prepare();
 
   std::unique_ptr<std::list<uint64_t>::iterator> min_options_file_number_elem;
@@ -1603,6 +1609,7 @@ Status DBImpl::CompactFilesImpl(
     sfm->OnCompactionCompletion(c.get());
   }
 
+  versions_->UnregisterRunningL1PlusCompaction(job_context->job_id);
   ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
 
   mutex_.Unlock();
@@ -3507,6 +3514,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
     }
 
     assert(num_running_compactions_ > 0);
+    versions_->UnregisterRunningL1PlusCompaction(job_context.job_id);
     num_running_compactions_--;
 
     if (bg_thread_pri == Env::Priority::LOW) {
@@ -3956,6 +3964,10 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         c->trim_ts(), &blob_callback_, &bg_compaction_scheduled_,
         &bg_bottom_compaction_scheduled_,
         &num_running_l0_compactions_, &num_running_l1_compactions_);
+    if (c->start_level() >= 1) {
+      versions_->RegisterRunningL1PlusCompaction(
+          job_context->job_id, c->score(), c->start_level());
+    }
     compaction_job.Prepare();
 
     std::unique_ptr<std::list<uint64_t>::iterator> min_options_file_number_elem;

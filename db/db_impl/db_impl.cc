@@ -295,6 +295,14 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       write_buffer_manager_, &write_controller_, &block_cache_tracer_,
       io_tracer_, db_id_, db_session_id_, options.daily_offpeak_time_utc,
       &error_handler_, read_only));
+
+  // yhh0316: dynamic IO priority for L1+ compaction
+  // versions_->SetMaxBackgroundCompactions(
+  //     mutable_db_options_.max_background_compactions > 0
+  //         ? mutable_db_options_.max_background_compactions
+  //         : 64);
+  // yhh0316: addition ends here
+
   column_family_memtables_.reset(
       new ColumnFamilyMemTablesImpl(versions_->GetColumnFamilySet()));
 

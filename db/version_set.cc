@@ -5261,6 +5261,89 @@ VersionSet::VersionSet(
       read_only_(read_only),
       closed_(false) {}
 
+// yhh0316: dynamic IO priority for L1+ compaction
+void VersionSet::SetMaxBackgroundCompactions(int max_background_compactions) {
+  InstrumentedMutexLock l(&running_l1_plus_mutex_);
+  size_t capacity = (max_background_compactions > 0)
+                        ? static_cast<size_t>(max_background_compactions)
+                        : kDefaultL1PlusRegistryCapacity;
+  if (running_l1_plus_slots_.size() != capacity) {
+    running_l1_plus_slots_.resize(capacity);
+    for (auto& slot : running_l1_plus_slots_) {
+      slot.job_id = 0;
+    }
+  }
+  running_l1_plus_capacity_ = capacity;
+}
+
+void VersionSet::RegisterRunningL1PlusCompaction(uint64_t job_id, double score,
+                                                int start_level) {
+  if (start_level < 1) {
+    return;
+  }
+  InstrumentedMutexLock l(&running_l1_plus_mutex_);
+  for (auto& slot : running_l1_plus_slots_) {
+    if (slot.job_id == 0) {
+      slot.job_id = job_id;
+      slot.score = score;
+      slot.start_level = start_level;
+      // printf("[DEBUG] L1+ compaction REGISTER job_id=%" PRIu64 " score=%.2f "
+      //        "start_level=%d -> list now:",
+      //        (uint64_t)job_id, score, start_level);
+      // for (const auto& s : running_l1_plus_slots_) {
+      //   if (s.job_id != 0) {
+      //     printf(" [%" PRIu64 ",%.2f,L%d]", (uint64_t)s.job_id, s.score,
+      //            s.start_level);
+      //   }
+      // }
+      // printf("\n");
+      // fflush(stdout);
+      return;
+    }
+  }
+  // No free slot; registry full, skip registration (optional: log)
+}
+
+void VersionSet::UnregisterRunningL1PlusCompaction(uint64_t job_id) {
+  InstrumentedMutexLock l(&running_l1_plus_mutex_);
+  for (auto& slot : running_l1_plus_slots_) {
+    if (slot.job_id == job_id) {
+      slot.job_id = 0;
+      slot.score = 0.0;
+      slot.start_level = 0;
+      // printf("[DEBUG] L1+ compaction UNREGISTER job_id=%" PRIu64
+      //        " -> list now:",
+      //        (uint64_t)job_id);
+      // for (const auto& s : running_l1_plus_slots_) {
+      //   if (s.job_id != 0) {
+      //     printf(" [%" PRIu64 ",%.2f,L%d]", (uint64_t)s.job_id, s.score,
+      //            s.start_level);
+      //   }
+      // }
+      // printf("\n");
+      // fflush(stdout);
+      return;
+    }
+  }
+}
+
+double VersionSet::GetAverageScoreOfL1PlusRunning() const {
+  InstrumentedMutexLock l(&running_l1_plus_mutex_);
+  double sum = 0.0;
+  size_t count = 0;
+  for (const auto& slot : running_l1_plus_slots_) {
+    if (slot.job_id != 0) {
+      sum += slot.score;
+      count++;
+    }
+  }
+  if (count == 0) {
+    return 0.0;
+  }
+  return sum / static_cast<double>(count);
+}
+// yhh0316: addition ends here 
+
 Status VersionSet::Close(FSDirectory* db_dir, InstrumentedMutex* mu) {
   Status s;
   if (closed_ || read_only_ || !manifest_file_number_ || !descriptor_log_) {

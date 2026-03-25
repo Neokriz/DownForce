@@ -2225,7 +2225,22 @@ Env::IOPriority CompactionJob::GetRateLimiterPriority() {
     }
   }
 
-  return Env::IO_LOW;
+  // yhh0316: dynamic IO priority for L1+ compaction
+  // L1+ compactions: compare this job's score to the average of running L1+
+  // compactions; above average gets IO_MID, else IO_LOW.
+  // if (compact_->compaction->start_level() >= 1 && versions_) {
+  //   double avg = versions_->GetAverageScoreOfL1PlusRunning();
+  //   // If no other L1+ running (avg 0 and we are the only one or first), fallback
+  //   // to fixed threshold to avoid always IO_LOW.
+  //   if (avg > 0.0) {
+  //     return compact_->compaction->score() > avg ? Env::IO_MID : Env::IO_LOW;
+  //   }
+  // }
+  // yhh0316: addition ends here
+  // if (compact_->compaction->score() > 3) {
+  //   return Env::IO_MID;
+  // }
+  return Env::IO_LOW; //original code
 }
 
 }  // namespace ROCKSDB_NAMESPACE

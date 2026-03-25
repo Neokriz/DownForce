@@ -1565,6 +1565,16 @@ class VersionSet {
 
   const ImmutableDBOptions* db_options() const { return db_options_; }
 
+  // yhh0316: dynamic IO priority for L1+ compaction
+  // L1+ running compaction registry for rate limiter priority (score-based).
+  // Capacity is set by SetMaxBackgroundCompactions (called by DBImpl at open).
+  void SetMaxBackgroundCompactions(int max_background_compactions);
+  void RegisterRunningL1PlusCompaction(uint64_t job_id, double score,
+                                      int start_level);
+  void UnregisterRunningL1PlusCompaction(uint64_t job_id);
+  double GetAverageScoreOfL1PlusRunning() const;
+  // yhh0316: addition ends here
+
   static uint64_t GetNumLiveVersions(Version* dummy_versions);
 
   static uint64_t GetTotalSstFilesSize(Version* dummy_versions);
@@ -1722,6 +1732,18 @@ class VersionSet {
 
   // Pointer to the DB's ErrorHandler.
   ErrorHandler* const error_handler_;
+
+  // L1+ compaction registry: (job_id, score, start_level) per slot; job_id==0
+  // means empty. Used for score-based rate limiter priority.
+  struct RunningL1PlusSlot {
+    uint64_t job_id = 0;
+    double score = 0.0;
+    int start_level = 0;
+  };
+  static constexpr size_t kDefaultL1PlusRegistryCapacity = 64;
+  std::vector<RunningL1PlusSlot> running_l1_plus_slots_;
+  size_t running_l1_plus_capacity_ = 0;
+  mutable InstrumentedMutex running_l1_plus_mutex_;
 
  private:
   // REQUIRES db mutex at beginning. may release and re-acquire db mutex
