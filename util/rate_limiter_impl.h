@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <utility>
 
 #include "port/port.h"
 #include "rocksdb/env.h"
@@ -151,6 +152,10 @@ class GenericRateLimiter : public RateLimiter {
   int64_t num_drains_;
   const int64_t max_bytes_per_sec_;
   std::chrono::microseconds tuned_time_;
+
+  // Bytes granted to IO_LOW in the current refill period; reset to 0 each refill.
+  // IO_LOW is capped at refill_bytes_per_period/2 per period.
+  int64_t io_low_bytes_this_period_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE
