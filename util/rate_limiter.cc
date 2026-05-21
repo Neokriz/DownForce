@@ -152,7 +152,7 @@ void GenericRateLimiter::Request(int64_t bytes, const Env::IOPriority pri,
     int64_t bytes_through = std::min(available_bytes_, bytes);
     if (pri == Env::IO_LOW) {
       int64_t max_io_low = (refill_bytes_per_period_.load(std::memory_order_relaxed) / 4) -
-                            io_low_bytes_this_period_;
+                            io_low_bytes_this_period_; // DRS core
       max_io_low = std::max<int64_t>(0, max_io_low);
       bytes_through = std::min(bytes_through, max_io_low);
     }
@@ -302,7 +302,7 @@ void GenericRateLimiter::RefillBytesAndGrantRequestsLocked() {
       auto* next_req = queue->front();
       int64_t max_grant = available_bytes_;
       if (current_pri == Env::IO_LOW) {
-        int64_t max_io_low = (refill_bytes_per_period / 4) - io_low_bytes_this_period_;
+        int64_t max_io_low = (refill_bytes_per_period / 1) - io_low_bytes_this_period_; // DRS core
         max_io_low = std::max<int64_t>(0, max_io_low);
         max_grant = std::min(max_grant, max_io_low);
       }

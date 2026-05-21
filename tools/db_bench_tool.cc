@@ -6028,6 +6028,7 @@ class Benchmark {
         bytes += val.size() + key_size_ + user_timestamp_size_;
         ++num_written;
 
+        // Workload modification: Control write rate with a fixed sleep duration.
         // 고정된 sleep 시간으로 write rate 조절
         // 설정된 간격마다 sleep 수행
         if (FLAGS_write_rate_sleep_us > 0 &&
