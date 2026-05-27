@@ -2211,11 +2211,18 @@ std::string CompactionJob::GetTableFileName(uint64_t file_number) {
 }
 
 Env::IOPriority CompactionJob::GetRateLimiterPriority() {
-  // L0 compaction: optionally bypass rate limiter (same as the method used inFlush).
-  if (compact_->compaction->start_level() == 0 &&
+  const int start_level = compact_->compaction->start_level();
+
+  // L0 compaction can optionally bypass rate limiter.
+  if (start_level == 0 &&
       compact_->compaction->immutable_options()->rate_limit_bypass_l0_compaction) {
     return Env::IO_TOTAL;
   }
+  // // L0/L1 compactions should get at least IO_MID budget when they are
+  // // rate-limited.
+  // if (start_level <= 1) {
+  //   return Env::IO_MID;
+  // }
   if (versions_ && versions_->GetColumnFamilySet() &&
       versions_->GetColumnFamilySet()->write_controller()) {
     WriteController* write_controller =
