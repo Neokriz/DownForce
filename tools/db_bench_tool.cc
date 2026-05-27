@@ -5513,8 +5513,8 @@ class Benchmark {
     RandomGenerator gen;
     int64_t bytes = 0;
     Duration duration = loading_duration;
-    rocksdb::ReadOptions r_op;
-    rocksdb::WriteOptions w_op;
+    ReadOptions r_op = read_options_;
+    WriteOptions w_op = write_options_;
     if (load) {
       while (!duration.Done(entries_per_batch_)) {
         DB* db = SelectDB(thread);
@@ -5590,7 +5590,7 @@ class Benchmark {
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
           } break;
           case ycsbc::SCAN: {
-            Iterator* db_iter = db_.db->NewIterator(rocksdb::ReadOptions());
+            Iterator* db_iter = db_.db->NewIterator(r_op);
             db_iter->Seek(key);
             int len = workload->scan_len_chooser_->Next();
             for (int i = 0; db_iter->Valid() && i < len; i++) {
@@ -6029,8 +6029,8 @@ class Benchmark {
         ++num_written;
 
         // Workload modification: Control write rate with a fixed sleep duration.
-        // 고정된 sleep 시간으로 write rate 조절
-        // 설정된 간격마다 sleep 수행
+        // Adjusting write speed using a fixed sleep time
+        // Execute a sleep at set intervals
         if (FLAGS_write_rate_sleep_us > 0 &&
             num_written % FLAGS_write_rate_sleep_interval == 0) {
           FLAGS_env->SleepForMicroseconds(FLAGS_write_rate_sleep_us);
