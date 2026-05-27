@@ -531,7 +531,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
     // return nullptr;
-    printf("[DEBUG] LevelCompactionBuilder::PickCompaction: SetupOtherL0FilesIfNeeded = false\n");
+    //printf("[DEBUG] LevelCompactionBuilder::PickCompaction: SetupOtherL0FilesIfNeeded = false\n");
     if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit){
       if(start_level_ != 0) return nullptr;
     }
@@ -943,11 +943,12 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     }
 
     // disable, seg..
+    // if(start_level_inputs_.size() <= 0) 
+    //   return false;
+    // else
+    //   return true;
     if(start_level_inputs_.size() <= 0) 
-      return false;
-    else
-      return true;
-    
+      return start_level_inputs_.size() > 0;
 
     /*
     if(static_cast<int>(compaction_picker_->level0_compactions_in_progress()->size()) < limit - 1){ 
